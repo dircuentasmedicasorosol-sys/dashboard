@@ -1,0 +1,3047 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico de Traslados - Orosol</title>
+    <!-- Ícono de la pestaña. Va embebido (no es un archivo aparte) para que sobreviva al mover
+         el HTML o a un "Guardar página como" del navegador. -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f172a'/%3E%3Ccircle cx='32' cy='32' r='15' fill='none' stroke='%23fbbf24' stroke-width='7'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23fbbf24'/%3E%3C/svg%3E">
+    <!-- Librerías: se sirven desde la carpeta local que creó el navegador al guardar la página,
+         con la CDN de respaldo por si esa carpeta se borra o se muda solo el .html -->
+    <script src="./Dashboard Analítico de Traslados - Orosol_files/3.4.16" onerror="this.onerror=null;this.src='https://cdn.tailwindcss.com/3.4.16'"></script>
+        <script src="./Dashboard Analítico de Traslados - Orosol_files/chart.umd.min.js.descarga" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js'"></script>
+        <script src="./Dashboard Analítico de Traslados - Orosol_files/xlsx.full.min.js.descarga" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'"></script>
+        <script src="./Dashboard Analítico de Traslados - Orosol_files/lucide.min.js.descarga" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js'"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Ancho del panel. La plantilla venía con tope de 1280 px (max-w-7xl), que en monitores
+           grandes deja banda vacía a los lados. Para volver a topear, ponga aquí un max-width. */
+        .page-wrap { width: 100%; margin-left: auto; margin-right: auto; max-width: none; padding-left: 16px; padding-right: 16px; }
+        @media (min-width: 1280px) { .page-wrap { padding-left: 24px; padding-right: 24px; } }
+
+        /* Módulo 5: un móvil = un bloque. La celda del móvil abarca (rowspan) todas sus zonas y el bloque
+           se cierra con una línea gris gruesa arriba y abajo, para ver dónde termina un carro y empieza el siguiente. */
+        #zw-table-body>tr.zw-grp-top>td { border-top: 3px solid #94a3b8; }
+        #zw-table-body>tr.zw-grp-bot>td { border-bottom: 3px solid #94a3b8; }
+        #zw-table-body>tr>td.zw-veh-cell { border-right: 2px solid #cbd5e1; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-lg sticky top-0 z-50">
+        <div class="page-wrap py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-600 rounded-lg shadow-inner">
+                    <i data-lucide="bar-chart-3" class="w-7 h-7 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Dashboard Operativo de Traslados</h1>
+                    <p class="text-xs text-indigo-200">Orosol Transportes • Auditoría y Control de Servicios</p>
+                </div>
+            </div>
+
+            <!-- Upload Area & Controls -->
+            <div class="flex items-center gap-3">
+                <label for="excel-file" class="cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                    <span>Cargar Excel</span>
+                    <input type="file" id="excel-file" accept=".xlsx, .xls" class="hidden">
+                </label>
+                <div id="file-info" class="text-xs bg-indigo-800/60 px-3 py-2 rounded-lg border border-indigo-500/30 hidden">
+                    <span id="file-name" class="font-semibold block truncate max-w-[180px]">---</span>
+                    <span id="sheets-count" class="text-indigo-300">0 hojas</span>
+                    <span id="range-info" class="text-indigo-300 block">---</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Subheader / Selector de Hoja -->
+    <div id="sheet-selector-container" class="bg-white border-b border-slate-200 py-3 shadow-sm sticky z-40 hidden">
+        <div class="page-wrap flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    <i data-lucide="layers" class="w-4 h-4 text-indigo-600"></i> Vista de Hoja:
+                </span>
+                <div id="sheet-buttons" class="flex flex-wrap gap-2">
+                    <!-- Buttons generated dynamically -->
+                </div>
+            </div>
+
+            <!-- Opciones global fines de semana y festivos -->
+            <div class="flex items-center gap-2 text-xs bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <input type="checkbox" id="include-non-biz-toggle" class="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                <label for="include-non-biz-toggle" class="cursor-pointer select-none font-medium text-slate-700">
+                    Incluir Fines de Semana y Festivos en Promedio
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="page-wrap py-6 flex-1 w-full flex flex-col gap-6">
+
+        <!-- Initial Placeholder State -->
+        <div id="placeholder-state" class="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center my-auto flex flex-col items-center justify-center gap-4">
+            <div class="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
+                <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-slate-800">Carga un archivo de Excel para comenzar</h3>
+                <p class="text-sm text-slate-500 max-w-md mt-1">Sube tu base de datos (por ejemplo, <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono text-xs">HISTORICO TRASLADOS OROSOL.xlsx</code>) para generar el reporte consolidado.</p>
+            </div>
+            <button onclick="document.getElementById('excel-file').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-md transition-all">
+                <i data-lucide="file-plus" class="w-4 h-4"></i>
+                Seleccionar Archivo
+            </button>
+        </div>
+
+        <!-- Dashboard Body (Hidden until file load) -->
+        <div id="dashboard-body" class="hidden flex-col gap-6">
+
+            <!-- Warnings -->
+            <div id="warnings-banner" class="hidden bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-rose-800 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Advertencias de lectura del archivo
+                    </h3>
+                    <button onclick="document.getElementById('warnings-banner').classList.add('hidden')" class="text-rose-400 hover:text-rose-700 text-lg leading-none px-1">×</button>
+                </div>
+                <ul id="warnings-list" class="text-xs text-rose-700 list-disc pl-5 flex flex-col gap-1"></ul>
+            </div>
+
+            <!-- Los indicadores quedan como columna fija a la izquierda y el contenido a la derecha. -->
+            <div class="flex flex-col lg:flex-row items-start gap-6">
+            <aside id="kpi-rail" class="w-full lg:w-[236px] lg:shrink-0 lg:sticky lg:z-30 lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto custom-scrollbar pr-1">
+            <!-- Global KPI Cards -->
+            <div id="kpi-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-1 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-slate-500">
+                        <span class="text-xs font-semibold uppercase tracking-wider">Total Registros</span>
+                        <i data-lucide="database" class="w-4 h-4 text-slate-400"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span id="kpi-total" class="text-2xl font-black text-slate-800">0</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Filas con datos en la vista</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-slate-500">
+                        <span class="text-xs font-semibold uppercase tracking-wider">Servicios Válidos</span>
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span id="kpi-validos" class="text-2xl font-black text-emerald-600">0</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Estados activos + con vehículo</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-slate-500">
+                        <span class="text-xs font-semibold uppercase tracking-wider">Usu. Domicilio</span>
+                        <i data-lucide="home" class="w-4 h-4 text-indigo-500"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span id="kpi-domicilio" class="text-2xl font-black text-indigo-600">0</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Origen: Domicilio</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-slate-500">
+                        <span class="text-xs font-semibold uppercase tracking-wider">Promedio Diario</span>
+                        <i data-lucide="trending-up" class="w-4 h-4 text-amber-500"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span id="kpi-promedio" class="text-2xl font-black text-amber-600">0.0</span>
+                        <p id="kpi-promedio-sub" class="text-[11px] text-slate-400 mt-0.5">Lunes a Viernes (Sin Festivos)</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-slate-500">
+                        <span class="text-xs font-semibold uppercase tracking-wider">Valor Acumulado</span>
+                        <i data-lucide="dollar-sign" class="w-4 h-4 text-purple-500"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span id="kpi-valor" class="text-xl font-black text-purple-700">$0</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Facturación total (Col. valor)</p>
+                    </div>
+                </div>
+            </div>
+            </aside><!-- /#kpi-rail -->
+
+            <div id="content-col" class="flex-1 min-w-0 w-full flex flex-col gap-6">
+            <!-- Navigation Tabs -->
+            <div id="sticky-strip" class="bg-slate-200 p-1 rounded-xl flex flex-wrap gap-1 border border-slate-300 sticky z-30 shadow-sm">
+                <button onclick="switchTab('tab-part1')" id="btn-tab-part1" class="tab-btn active flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-sm">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                    <span>PARTE 1: Servicios por Día</span>
+                </button>
+                <button onclick="switchTab('tab-part2')" id="btn-tab-part2" class="tab-btn flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span>PARTE 2: Zonas y Usuarios</span>
+                </button>
+                <button onclick="switchTab('tab-part3')" id="btn-tab-part3" class="tab-btn flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                    <span>PARTE 3: Rendimiento por Vehículo</span>
+                    <span id="tab-part3-alert-badge" class="hidden bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded-md text-[10px] font-black leading-none" title="Móviles con 2 o más días seguidos sin programación (sin domingos)">⚠ 0</span>
+                </button>
+                <button onclick="switchTab('tab-part4')" id="btn-tab-part4" class="tab-btn flex-1 min-w-[140px] py-2.5 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900">
+                    <i data-lucide="table" class="w-4 h-4"></i>
+                    <span>PARTE 4: Detalle de Registros</span>
+                </button>
+            </div><!-- /#sticky-strip -->
+
+            <!-- TAB CONTENTS -->
+
+            <!-- PARTE 1: Servicios por Día -->
+            <div id="tab-part1" class="tab-content flex flex-col gap-6">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="calendar-range" class="w-5 h-5 text-indigo-600"></i>
+                                1. Servicios Realizados por Día y Tendencia
+                            </h2>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <!-- Granularidad -->
+                            <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                                <span class="font-bold text-slate-600">Agrupar:</span>
+                                <select id="daily-granularity" class="bg-white border border-slate-300 rounded px-2 py-1 font-semibold text-indigo-700">
+                                    <option value="day" selected>Por día</option>
+                                    <option value="week">Por semana</option>
+                                    <option value="month">Por mes</option>
+                                </select>
+                            </div>
+
+                            <!-- Filtro de Estados -->
+                            <div class="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                                <span class="font-bold text-slate-600 mr-1">Filtrar Estado:</span>
+                                <div id="status-checkboxes" class="flex flex-wrap gap-2">
+                                    <!-- Checkboxes populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div class="relative h-[400px] w-full">
+                        <canvas id="chart-daily"></canvas>
+                    </div>
+
+                    <div id="trend-verdict" class="flex flex-wrap items-center gap-2 text-xs"></div>
+
+                    <!-- Footnote Note -->
+                    <div class="flex items-center justify-between text-xs text-slate-500 bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="info" class="w-4 h-4 text-amber-600 flex-shrink-0"></i>
+                            <span>Las barras de días <strong>Sábado, Domingo y Festivos</strong> se muestran en naranja y no cuentan para el promedio hábil. El promedio recorre <strong>todos</strong> los días del rango, incluidos los días hábiles sin servicios.</span>
+                        </div>
+                        <span id="non-biz-status-indicator" class="font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-md">
+                            Sáb, Dom y Festivos Excluidos
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Campana de Distribución de Servicios por Día -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="activity" class="w-5 h-5 text-teal-600"></i>
+                                Campana de Distribución de Servicios por Día
+                            </h2>
+                        </div>
+                        <div id="bell-stats" class="flex flex-wrap gap-2 text-xs"></div>
+                    </div>
+
+                    <div class="relative h-[380px] w-full">
+                        <canvas id="chart-bell"></canvas>
+                    </div>
+
+                    <!-- Lectura de la montaña: lado izquierdo = días flacos, centro = promedio, derecho = días fuertes -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div class="bg-rose-50/70 border border-rose-200 rounded-xl p-3 flex flex-col gap-1">
+                            <span class="font-black uppercase tracking-wider text-rose-700">Días por debajo del promedio</span>
+                            <div id="bell-left-stats" class="text-slate-600 leading-relaxed"></div>
+                        </div>
+                        <div class="bg-teal-50/70 border border-teal-200 rounded-xl p-3 text-center flex flex-col gap-1">
+                            <span class="font-black uppercase tracking-wider text-teal-700">Cómo es un día normal</span>
+                            <div id="bell-center-stats" class="text-slate-600 leading-relaxed"></div>
+                        </div>
+                        <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3 text-right flex flex-col gap-1">
+                            <span class="font-black uppercase tracking-wider text-indigo-700">Días por encima del promedio</span>
+                            <div id="bell-right-stats" class="text-slate-600 leading-relaxed"></div>
+                        </div>
+                    </div>
+
+                    <div id="bell-empty-note" class="hidden text-xs text-slate-600 bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                        Se necesitan al menos 3 días en el rango para dibujar la campana.
+                    </div>
+                </div>
+            </div>
+
+            <!-- PARTE 2: Zonas y Usuarios -->
+            <div id="tab-part2" class="tab-content hidden flex-col gap-6">
+
+                <!-- 2.1 Zonas / Ciudad Origen con Tabla Numérica (Solo Origen == Domicilio) -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="border-b border-slate-100 pb-3 flex justify-between items-center flex-wrap gap-2">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="map-pin" class="w-5 h-5 text-rose-500"></i>
+                                2. Distribución de Usuarios por Zona / Ciudad Origen
+                            </h2>
+                        </div>
+                        <span id="zones-total-badge" class="bg-rose-100 text-rose-800 text-xs font-bold px-3 py-1 rounded-lg">0 Domicilios Totales</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+                        <div class="lg:col-span-3 relative h-[380px] w-full flex items-center justify-center">
+                            <canvas id="chart-zones"></canvas>
+                        </div>
+
+                        <div class="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                            <h3 class="text-xs font-bold uppercase text-slate-600 tracking-wider">
+                                Desglose por Zona / Municipio (Domicilio)
+                            </h3>
+                            <div class="overflow-y-auto max-h-[310px] custom-scrollbar border border-slate-200 rounded-lg bg-white">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 font-semibold">
+                                        <tr>
+                                            <th class="p-2.5 whitespace-nowrap">Zona / Ciudad</th>
+                                            <th class="p-2.5 text-center whitespace-nowrap" title="Un registro = un servicio a domicilio">Servicios</th>
+                                            <th class="p-2.5 text-center whitespace-nowrap" title="Mismo viajero agrupado por Documento. El número chico es cuántos servicios hace cada uno en promedio.">Usuarios<br><span class="font-normal normal-case text-[10px] text-slate-400">servicios c/u</span></th>
+                                            <th class="p-2.5 text-right whitespace-nowrap">% de servicios</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="zones-table-body" class="divide-y divide-slate-100 text-slate-700 font-medium">
+                                        <!-- Dynamic zone rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 2.3 MÓDULO COMBINADO: Usuarios Recurrentes por Zona -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-3">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="layers" class="w-5 h-5 text-purple-600"></i>
+                                Usuarios Recurrentes por Zona / Ciudad Origen
+                            </h2>
+                        </div>
+                        <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-xs">
+                            <span class="font-bold text-slate-600">Filtro de Recurrencia:</span>
+                            <select id="recurrent-threshold-select" class="bg-white border border-slate-300 rounded px-2 py-1 font-semibold text-indigo-700">
+                                <option value="2" selected>≥ 2 servicios (Recurrentes)</option>
+                                <option value="3">≥ 3 servicios</option>
+                                <option value="5">≥ 5 servicios</option>
+                                <option value="10">≥ 10 servicios (Muy Frecuentes)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+                        <div class="lg:col-span-2 relative h-[360px] w-full">
+                            <canvas id="chart-users-by-zone"></canvas>
+                        </div>
+
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                            <h3 class="text-xs font-bold uppercase text-slate-600 tracking-wider">
+                                Usuarios Recurrentes por Municipio
+                            </h3>
+                            <div class="overflow-y-auto max-h-[290px] custom-scrollbar border border-slate-200 rounded-lg bg-white">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 font-semibold">
+                                        <tr>
+                                            <th class="p-2.5">Zona / Ciudad</th>
+                                            <th class="p-2.5 text-center">Usu. Recurrentes</th>
+                                            <th class="p-2.5 text-right whitespace-nowrap" title="Suma de traslados solo de los usuarios recurrentes, no del municipio completo.">Traslados de recurrentes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="combo-table-body" class="divide-y divide-slate-100 text-slate-700 font-medium">
+                                        <!-- Dynamic combo rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 2.2 Ranking de Usuarios Más Frecuentes -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
+                                3. Ranking de Usuarios Más Frecuentes
+                            </h2>
+                        </div>
+                        <select id="frequent-top-select" class="text-xs bg-slate-100 border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                            <option value="10">Top 10</option>
+                            <option value="15" selected>Top 15</option>
+                            <option value="25">Top 25</option>
+                            <option value="50">Top 50</option>
+                            <option value="100">Top 100</option>
+                            <option value="ALL">Todos</option>
+                        </select>
+                    </div>
+                    <!-- Scrollable viewport: el gráfico conserva su alto dinámico dentro de esta ventana fija -->
+                    <div class="overflow-y-auto max-h-[560px] custom-scrollbar border border-slate-200 rounded-lg bg-white p-2">
+                        <div id="users-chart-container" class="relative w-full transition-all duration-300 min-h-[400px]">
+                            <canvas id="chart-users"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2.2-B CUADRO RESUMEN: cuántos usuarios tienen X recogidas desde el domicilio -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="hash" class="w-5 h-5 text-indigo-600"></i>
+                            3-B. Cuántos usuarios tienen cada cantidad de servicios
+                        </h2>
+                        <span id="freq-summary-badge" class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded-lg">0 usuarios</span>
+                    </div>
+                    <div class="overflow-y-auto max-h-[420px] custom-scrollbar border border-slate-200 rounded-lg">
+                        <table class="w-full text-xs">
+                            <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                                <tr>
+                                    <th class="p-2.5 text-center whitespace-nowrap" title="Recogidas con Origen = Domicilio que hizo ese usuario">Servicios desde el domicilio</th>
+                                    <th class="p-2.5 text-center whitespace-nowrap">Usuarios</th>
+                                    <th class="p-2.5 text-right whitespace-nowrap">% de usuarios</th>
+                                    <th class="p-2.5 text-right whitespace-nowrap" title="Usuarios con esta cantidad o más">O más</th>
+                                </tr>
+                            </thead>
+                            <tbody id="freq-summary-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- PARTE 3: Rendimiento por Vehículo -->
+            <div id="tab-part3" class="tab-content hidden flex-col gap-6">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="truck" class="w-5 h-5 text-amber-500"></i>
+                                4. Rendimiento por Vehículo (Servicios vs Valor Generado)
+                            </h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-bold uppercase text-slate-500 tracking-wider" for="vehicle-sort">Ordenar</label>
+                            <select id="vehicle-sort" class="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-semibold text-indigo-700">
+                                <option value="movil" selected>Por móvil (menor a mayor)</option>
+                                <option value="valor">Por valor (mayor a menor)</option>
+                            </select>
+                            <button onclick="selectAllVehicles(true)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs px-3 py-1.5 rounded-lg font-semibold border border-indigo-200 transition-all">
+                                Seleccionar Todos
+                            </button>
+                            <button onclick="selectAllVehicles(false)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-semibold border border-slate-300 transition-all">
+                                Desmarcar Todos
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Dual Axis Chart -->
+                        <div class="lg:col-span-2 relative h-[400px] w-full">
+                            <canvas id="chart-vehicles"></canvas>
+                        </div>
+
+                        <!-- Table Summary with Checkboxes -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                            <h3 class="text-xs font-bold uppercase text-slate-600 tracking-wider flex items-center justify-between">
+                                <span>Filtrar por Móviles</span>
+                                <span id="vehicle-count-badge" class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[11px]">0 Seleccionados</span>
+                            </h3>
+
+                            <div class="overflow-y-auto max-h-[330px] custom-scrollbar border border-slate-200 rounded-lg bg-white">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 font-semibold">
+                                        <tr>
+                                            <th class="p-2 text-center w-8">Ver</th>
+                                            <th class="p-2">Vehículo</th>
+                                            <th class="p-2 text-center">Servicios</th>
+                                            <th class="p-2 text-right">Valor Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="vehicle-table-body" class="divide-y divide-slate-100 text-slate-700">
+                                        <!-- Dynamic vehicle rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cobertura territorial por móvil -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="border-b border-slate-100 pb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div class="max-w-3xl">
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="map" class="w-5 h-5 text-sky-500"></i>
+                                5. Zonas y ciudades que recorre cada móvil
+                            </h2>
+                        </div>
+                        <div class="flex items-end gap-3">
+                            <label class="text-xs font-semibold text-slate-600 flex flex-col gap-1">Semana
+                                <select id="zw-week" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white min-w-[170px]">
+                                    <option value="all">Todo el histórico</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input id="zw-search" type="text" placeholder="Buscar móvil…" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5 w-40">
+                        <button id="zw-all" type="button" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs px-3 py-1.5 rounded-lg font-semibold border border-indigo-200 transition-all">Seleccionar todos</button>
+                        <button id="zw-none" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-semibold border border-slate-300 transition-all">Desmarcar todos</button>
+                        <span id="zw-veh-count" class="text-[11px] text-slate-500"></span>
+                    </div>
+                    <div id="zw-veh-chips" class="flex flex-wrap gap-1.5 max-h-[104px] overflow-y-auto custom-scrollbar pr-1"></div>
+
+                    <div id="zw-summary" class="flex flex-wrap gap-2"></div>
+
+                    <div class="overflow-auto max-h-[560px] custom-scrollbar border border-slate-200 rounded-xl">
+                        <table class="w-full text-left text-xs">
+                            <thead id="zw-head" class="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 font-semibold">
+                                <tr>
+                                    <th class="p-2">Móvil</th>
+                                    <th class="p-2">Zona</th>
+                                    <th class="p-2 text-center">Servicios</th>
+                                    <th class="p-2 text-center">% del móvil</th>
+                                    <th class="p-2 text-center" title="Semanas (lunes a domingo) en las que el móvil tuvo servicios con origen en esa zona. S1 = primera semana del histórico; pase el cursor sobre la celda para ver las fechas. En negrita: semana en que ese móvil trabajó en dos zonas.">Semanas</th>
+                                    <th class="p-2">Ciudades donde trabajó</th>
+                                    <th class="p-2 text-slate-400">Ciudades de la zona sin servicio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="zw-table-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Días sin servicio por móvil -->
+                <div id="idle-module" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="border-b border-slate-100 pb-3 flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="calendar-x-2" class="w-5 h-5 text-rose-500"></i>
+                            6. Días sin servicio por móvil
+                        </h2>
+                        <span id="idle-count" class="text-[11px] text-slate-500"></span>
+                    </div>
+
+                    <div id="idle-alert-banner" class="hidden bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
+                        <i data-lucide="siren" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+                        <div id="idle-alert-text" class="text-xs text-amber-900 leading-relaxed"></div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                            <input id="idle-search" type="text" placeholder="Buscar móvil…" class="text-xs border border-slate-300 rounded-lg pl-8 pr-2 py-1.5 w-44">
+                        </div>
+                        <div class="flex items-center gap-2 ml-auto">
+                            <label class="text-[11px] font-bold uppercase text-slate-500 tracking-wider" for="idle-sort">Ordenar</label>
+                            <select id="idle-sort" class="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-semibold text-indigo-700">
+                                <option value="idle" selected>Más días sin servicio</option>
+                                <option value="streak">Más días seguidos</option>
+                                <option value="movil">Por móvil (menor a mayor)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-auto max-h-[560px] custom-scrollbar border border-slate-200 rounded-xl">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100 text-slate-600 sticky top-0 border-b border-slate-200 font-semibold">
+                                <tr>
+                                    <th class="p-2.5">Móvil</th>
+                                    <th class="p-2.5 text-center" title="Días del histórico (lun a sáb, sin domingos) en los que este móvil no tuvo ningún servicio válido">Días sin servicio</th>
+                                    <th class="p-2.5 text-center" title="Días seguidos sin servicio al cierre del histórico. Los domingos no cuentan ni cortan la racha. Alerta desde 2 días.">Días seguidos sin servicio</th>
+                                    <th class="p-2.5 w-8"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="idle-table-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PARTE 4: Detalle de Registros Cargados -->
+            <div id="tab-part4" class="tab-content hidden flex-col gap-6">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="table" class="w-5 h-5 text-indigo-600"></i>
+                                Detalle de Registros Cargados
+                            </h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="relative w-full max-w-xs">
+                                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                                <input type="text" id="table-search" placeholder="Buscar por paciente, documento, vehículo, ciudad..." class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                            </div>
+                            <button id="btn-export-csv" onclick="exportCSV()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs px-3 py-1.5 rounded-lg font-semibold border border-emerald-200 transition-all flex items-center gap-1.5 whitespace-nowrap">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportar CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl custom-scrollbar max-h-[480px]">
+                        <table class="w-full text-left text-xs whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-700 sticky top-0 border-b border-slate-200 font-bold">
+                                <tr>
+                                    <th class="p-3">CS</th>
+                                    <th class="p-3">Fila</th>
+                                    <th class="p-3">Hoja</th>
+                                    <th class="p-3">Fecha</th>
+                                    <th class="p-3">Hora</th>
+                                    <th class="p-3">Hora Llegada</th>
+                                    <th class="p-3">Estado</th>
+                                    <th class="p-3">Paciente</th>
+                                    <th class="p-3">Documento</th>
+                                    <th class="p-3">Origen</th>
+                                    <th class="p-3">Ciudad Origen</th>
+                                    <th class="p-3">Destino</th>
+                                    <th class="p-3">Ciudad Destino</th>
+                                    <th class="p-3">Vehículo</th>
+                                    <th class="p-3">Placa</th>
+                                    <th class="p-3">Conductor</th>
+                                    <th class="p-3 text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="raw-table-body" class="divide-y divide-slate-100 text-slate-700">
+                                <!-- Dynamic raw rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-slate-500">
+                        <span id="table-record-count">Mostrando 0 registros</span>
+                        <span id="table-limit-note">* Solo se muestran los primeros 300 registros para mayor velocidad. Usa Exportar CSV para ver todo.</span>
+                    </div>
+                </div>
+            </div>
+            </div><!-- /#content-col -->
+            </div><!-- /fila KPIs + contenido -->
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-3 px-4 text-center text-xs text-slate-400 mt-auto">
+        Orosol Transportes • Sistema de Auditoría y Visualización Operativa
+    </footer>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-900/60 z-[100] items-center justify-center">
+        <div class="bg-white rounded-2xl p-6 flex items-center gap-4 shadow-2xl max-w-sm">
+            <div class="animate-spin w-7 h-7 border-4 border-indigo-600 border-t-transparent rounded-full flex-shrink-0"></div>
+            <div>
+                <p class="font-bold text-sm text-slate-800">Procesando archivo…</p>
+                <p id="loading-detail" class="text-xs text-slate-500 mt-0.5">Leyendo hojas</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // ==================== FORMATO Y UTILIDADES ====================
+        const NF = new Intl.NumberFormat('es-CO');
+        const fmtNum = n => NF.format(Math.round(n || 0));
+        const fmtMoney = n => '$' + NF.format(Math.round(n || 0));
+        const pad2 = n => String(n).padStart(2, '0');
+
+        function escapeHtml(v) {
+            return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
+        function stripAccents(s) {
+            return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function normHeader(s) {
+            return stripAccents(String(s === null || s === undefined ? '' : s)).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        }
+
+        function isoUTC(d) {
+            return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+        }
+
+        function isoFromParts(y, m, d) {
+            return y + '-' + pad2(m) + '-' + pad2(d);
+        }
+
+        function isoToDateUTC(iso) {
+            const p = iso.split('-').map(Number);
+            return new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+        }
+
+        const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+        // ==================== FESTIVOS COLOMBIANOS (calculados) ====================
+        // Ley 51 de 1983: los festivos marcados con "puente" se corren al lunes siguiente.
+        function easterSunday(year) {
+            const a = year % 19;
+            const b = Math.floor(year / 100), c = year % 100;
+            const d = Math.floor(b / 4), e = b % 4;
+            const f = Math.floor((b + 8) / 25);
+            const g = Math.floor((b - f + 1) / 3);
+            const h = (19 * a + b - d - g + 15) % 30;
+            const i = Math.floor(c / 4), k = c % 4;
+            const l = (32 + 2 * e + 2 * i - h - k) % 7;
+            const m = Math.floor((a + 11 * h + 22 * l) / 451);
+            const month = Math.floor((h + l - 7 * m + 114) / 31);
+            const day = ((h + l - 7 * m + 114) % 31) + 1;
+            return new Date(Date.UTC(year, month - 1, day));
+        }
+
+        function nextMonday(dt) {
+            const d = new Date(dt.getTime());
+            const wd = d.getUTCDay();               // 0 = domingo, 1 = lunes
+            d.setUTCDate(d.getUTCDate() + (wd === 1 ? 0 : (8 - wd) % 7));
+            return d;
+        }
+
+        const holidayCache = new Map();   // year -> Map(iso -> nombre)
+
+        function holidaysOfYear(year) {
+            if (holidayCache.has(year)) return holidayCache.get(year);
+            const map = new Map();
+            const add = (dt, nombre) => map.set(isoUTC(dt), nombre);
+            const addMonday = (dt, nombre) => map.set(isoUTC(nextMonday(dt)), nombre);
+
+            add(new Date(Date.UTC(year, 0, 1)), 'Año Nuevo');
+            add(new Date(Date.UTC(year, 4, 1)), 'Día del Trabajo');
+            add(new Date(Date.UTC(year, 6, 20)), 'Independencia (20 de Julio)');
+            add(new Date(Date.UTC(year, 7, 7)), 'Batalla de Boyacá');
+            add(new Date(Date.UTC(year, 11, 8)), 'Inmaculada Concepción');
+            add(new Date(Date.UTC(year, 11, 25)), 'Navidad');
+
+            addMonday(new Date(Date.UTC(year, 0, 6)), 'Día de Reyes');
+            addMonday(new Date(Date.UTC(year, 2, 19)), 'San José');
+            addMonday(new Date(Date.UTC(year, 5, 29)), 'San Pedro y San Pablo');
+            addMonday(new Date(Date.UTC(year, 7, 15)), 'Asunción de la Virgen');
+            addMonday(new Date(Date.UTC(year, 9, 12)), 'Día de la Raza');
+            addMonday(new Date(Date.UTC(year, 10, 1)), 'Todos los Santos');
+            addMonday(new Date(Date.UTC(year, 10, 11)), 'Independencia de Cartagena');
+
+            const e = easterSunday(year);
+            const ey = e.getUTCFullYear(), em = e.getUTCMonth(), ed = e.getUTCDate();
+            add(new Date(Date.UTC(ey, em, ed - 3)), 'Jueves Santo');
+            add(new Date(Date.UTC(ey, em, ed - 2)), 'Viernes Santo');
+            addMonday(new Date(Date.UTC(ey, em, ed + 39)), 'Ascensión del Señor');
+            addMonday(new Date(Date.UTC(ey, em, ed + 60)), 'Corpus Christi');
+            addMonday(new Date(Date.UTC(ey, em, ed + 68)), 'Sagrado Corazón');
+
+            holidayCache.set(year, map);
+            return map;
+        }
+
+        function holidayName(iso) {
+            return holidaysOfYear(Number(iso.slice(0, 4))).get(iso) || null;
+        }
+
+        function isHoliday(iso) {
+            return holidaysOfYear(Number(iso.slice(0, 4))).has(iso);
+        }
+
+        // Día hábil: lunes a viernes que no sea festivo.
+        function isBusinessDay(iso) {
+            const wd = isoToDateUTC(iso).getUTCDay();
+            if (wd === 0 || wd === 6) return false;
+            return !isHoliday(iso);
+        }
+
+        function dayTag(iso) {
+            const h = holidayName(iso);
+            if (h) return ' (Festivo: ' + h + ')';
+            const wd = isoToDateUTC(iso).getUTCDay();
+            if (wd === 6) return ' (Sáb)';
+            if (wd === 0) return ' (Dom)';
+            return '';
+        }
+
+        function isNonBusiness(iso) {
+            return !isBusinessDay(iso);
+        }
+
+        // ==================== CONVERSIÓN DE VALORES DE EXCEL ====================
+        // Las fechas llegan como número de serie (46296) o como Date; nunca confiar en new Date(texto).
+        function parseFecha(v) {
+            if (v === null || v === undefined || v === '') return null;
+
+            if (v instanceof Date) {
+                if (isNaN(v.getTime())) return null;
+                return isoFromParts(v.getFullYear(), v.getMonth() + 1, v.getDate());
+            }
+
+            if (typeof v === 'number') {
+                if (!isFinite(v)) return null;
+                // Serie de Excel (1900 date system). Rango razonable: 1970-2100.
+                if (v > 25569 && v < 73415) {
+                    const ms = Math.round((v - 25569) * 86400000);
+                    const d = new Date(ms);
+                    return isoUTC(d);
+                }
+                return null;
+            }
+
+            const s = String(v).trim();
+            if (!s) return null;
+
+            let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+            if (m) return validIso(+m[1], +m[2], +m[3]);
+
+            m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(s);
+            if (m) {
+                let y = +m[3];
+                if (y < 100) y += y > 50 ? 1900 : 2000;
+                // Convención colombiana: dd/mm/aaaa. Si el primer campo no puede ser día, se invierte.
+                let d = +m[1], mo = +m[2];
+                if (d > 31 && mo <= 31) { const t = d; d = mo; mo = t; }
+                else if (mo > 12 && d <= 12) { const t = d; d = mo; mo = t; }
+                return validIso(y, mo, d);
+            }
+
+            const parsed = new Date(s);
+            if (!isNaN(parsed.getTime())) return isoFromParts(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+            return null;
+        }
+
+        function validIso(y, m, d) {
+            if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31) || !(y >= 1900 && y <= 2200)) return null;
+            const dt = new Date(Date.UTC(y, m - 1, d));
+            if (dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+            return isoUTC(dt);
+        }
+
+        // Hora y Hora Llegada llegan como fracción de día (0.3958 = 09:30) o como Date.
+        function parseHora(v) {
+            if (v === null || v === undefined || v === '') return '';
+
+            if (v instanceof Date) {
+                if (isNaN(v.getTime())) return '';
+                return pad2(v.getHours()) + ':' + pad2(v.getMinutes());
+            }
+
+            if (typeof v === 'number' && isFinite(v)) {
+                const frac = v >= 1 ? v - Math.floor(v) : v;
+                if (frac < 0) return '';
+                const totalMin = Math.round(frac * 1440) % 1440;
+                return pad2(Math.floor(totalMin / 60)) + ':' + pad2(totalMin % 60);
+            }
+
+            const s = String(v).trim();
+            if (!s) return '';
+            const m = /^(\d{1,2}):(\d{2})/.exec(s);
+            if (m) return pad2(+m[1]) + ':' + m[2];
+            const n = parseFloat(s.replace(',', '.'));
+            if (isFinite(n) && n >= 0 && n < 1) return parseHora(n);
+            return s;
+        }
+
+        // Con raw:true los números ya vienen numéricos; esto solo cubre celdas en texto.
+        function parseMoney(v) {
+            if (v === null || v === undefined || v === '') return 0;
+            if (typeof v === 'number') return isFinite(v) ? v : 0;
+
+            let s = String(v).trim();
+            if (!s || /#|ref!|n\/?d|n\/?a|null|nan|ningun|sin dato/i.test(s)) return 0;
+
+            const negative = /^\(.*\)$/.test(s) || s.startsWith('-');
+            s = s.replace(/[^0-9.,]/g, '');
+            if (!s) return 0;
+
+            const lastComma = s.lastIndexOf(',');
+            const lastDot = s.lastIndexOf('.');
+
+            if (lastComma > -1 && lastDot > -1) {
+                // El último separador que aparece es el decimal.
+                if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+                else s = s.replace(/,/g, '');
+            } else {
+                const sep = lastComma > -1 ? ',' : (lastDot > -1 ? '.' : null);
+                if (sep) {
+                    const groups = s.split(sep);
+                    // Convención colombiana: "94.250" y "1.234.567" son miles, no decimales.
+                    const esMiles = groups.slice(1).every(g => g.length === 3);
+                    if (esMiles) s = groups.join('');
+                    else s = groups.slice(0, -1).join('') + '.' + groups[groups.length - 1];
+                }
+            }
+
+            const n = parseFloat(s);
+            if (!isFinite(n)) return 0;
+            return negative ? -Math.abs(n) : n;
+        }
+
+        function cleanText(v, fallback) {
+            if (v === null || v === undefined) return fallback || '';
+            if (v instanceof Date) return parseFecha(v) || fallback || '';
+            const s = String(v).trim();
+            return s === '' ? (fallback || '') : s;
+        }
+
+        // ==================== MAPEO DE COLUMNAS POR ENCABEZADO ====================
+        const FIELD_ALIASES = [
+            ['cs', ['cs', 'consecutivo', 'numero servicio', 'nro', 'id servicio']],
+            ['fecha', ['fecha', 'fecha servicio', 'fecha traslado', 'fecha del servicio']],
+            ['hora', ['hora', 'hora servicio', 'hora traslado', 'hora programada', 'hora del servicio']],
+            ['horaLlegada', ['hora llegada', 'hora de llegada', 'hora llegada destino', 'llegada']],
+            ['estado', ['estado', 'estado servicio', 'estado del servicio']],
+            ['paciente', ['paciente', 'nombre paciente', 'usuario', 'nombre usuario', 'nombre', 'nombre del paciente']],
+            ['documento', ['documento', 'documento paciente', 'numero documento', 'cedula', 'identificacion', 'documento del paciente']],
+            ['origen', ['origen', 'lugar origen', 'punto origen', 'sitio origen']],
+            ['destino', ['destino', 'lugar destino', 'punto destino', 'sitio destino']],
+            ['vehiculo', ['vehiculo', 'movil', 'numero movil', 'interno', 'carro']],
+            ['placa', ['placa', 'placas', 'numero placa']],
+            ['conductor', ['conductor', 'operador', 'chofer', 'nombre conductor']],
+            ['ciudadOrigen', ['ciudad origen', 'municipio origen', 'ciudad de origen', 'poblacion origen']],
+            ['ciudadDestino', ['ciudad destino', 'municipio destino', 'ciudad de destino', 'poblacion destino']],
+            ['zonaPaciente', ['zona paciente', 'zona del paciente', 'zona']],
+            ['empresa', ['empresa', 'eps', 'aseguradora', 'entidad']],
+            ['proposito', ['proposito', 'motivo', 'motivo traslado']],
+            ['tipoViaje', ['tipo viaje', 'tipo de viaje', 'tipo traslado']],
+            ['tipo', ['tipo', 'tipo servicio', 'tipo de servicio']],
+            ['valor', ['valor', 'valor traslado', 'valor servicio', 'valor facturado', 'facturacion', 'total', 'valor total']]
+        ];
+
+        // Índices de respaldo si la hoja no trae encabezados reconocibles (layout estándar Orosol).
+        const LEGACY_INDEX = {
+            cs: 0, fecha: 1, hora: 2, estado: 3, paciente: 4, documento: 5, origen: 6,
+            destino: 7, vehiculo: 8, placa: 9, conductor: 10, zonaPaciente: 15,
+            horaLlegada: 26, ciudadOrigen: 28, ciudadDestino: 32, valor: 37
+        };
+
+        function buildColumnMap(headerCells) {
+            const map = {};
+            const used = new Set();
+
+            // 1ª pasada: coincidencia exacta
+            FIELD_ALIASES.forEach(([field, aliases]) => {
+                for (let i = 0; i < headerCells.length; i++) {
+                    const h = headerCells[i];
+                    if (!h || used.has(i)) continue;
+                    if (aliases.indexOf(h) !== -1) { map[field] = i; used.add(i); return; }
+                }
+            });
+
+            // 2ª pasada: el encabezado contiene el alias
+            FIELD_ALIASES.forEach(([field, aliases]) => {
+                if (map[field] !== undefined) return;
+                for (let i = 0; i < headerCells.length; i++) {
+                    const h = headerCells[i];
+                    if (!h || used.has(i)) continue;
+                    if (aliases.some(a => h.indexOf(a) !== -1 || a.indexOf(h) !== -1)) { map[field] = i; used.add(i); return; }
+                }
+            });
+
+            return map;
+        }
+
+        // ==================== ESTADO GLOBAL ====================
+        let workbookData = {};       // { nombreHoja: [filas] }
+        let sheetMeta = {};          // { nombreHoja: { total, sinVehiculo, ocultas, sinFecha } }
+        let warnings = [];
+        let activeSheet = 'GLOBAL';
+        let availableStatuses = [];
+        let statusCounts = {};
+        let selectedStatuses = new Set();
+        let includeNonBizInAverage = false;
+        let dailyGranularity = 'day';
+
+        let selectedVehicles = new Set();
+        let vehiclesInitialized = false;
+        let allAvailableVehicles = [];
+        let vehicleSortMode = 'movil';
+
+        let currentData = [];        // resultado del último filtrado, reutilizado por la tabla
+        let duplicateCS = new Set();
+
+        let chartDailyInstance = null;
+        let chartBellInstance = null;
+        let chartZonesInstance = null;
+        let chartUsersInstance = null;
+        let chartUsersByZoneInstance = null;
+        let chartVehiclesInstance = null;
+
+        if (window.lucide && lucide.createIcons) lucide.createIcons();
+
+        // ==================== EVENTOS ====================
+        document.getElementById('excel-file').addEventListener('change', handleFileUpload);
+        document.getElementById('include-non-biz-toggle').addEventListener('change', (e) => {
+            includeNonBizInAverage = e.target.checked;
+            document.getElementById('non-biz-status-indicator').textContent =
+                includeNonBizInAverage ? 'Fines de Semana y Festivos Incluidos' : 'Sáb, Dom y Festivos Excluidos';
+            updateDashboard();
+        });
+        document.getElementById('frequent-top-select').addEventListener('change', () => updateDashboard());
+        document.getElementById('recurrent-threshold-select').addEventListener('change', () => updateDashboard());
+        document.getElementById('daily-granularity').addEventListener('change', (e) => {
+            dailyGranularity = e.target.value;
+            updateDashboard();
+        });
+        document.getElementById('zw-week').addEventListener('change', (e) => {
+            zoneWeekState.week = e.target.value;
+            renderZoneWeekModule();
+        });
+        document.getElementById('vehicle-sort').addEventListener('change', (e) => {
+            vehicleSortMode = e.target.value;
+            renderVehiclesChartInteractive();
+        });
+        // Los chips se crean en cada render, así que el clic se escucha en el contenedor.
+        document.getElementById('zw-veh-chips').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-veh]');
+            if (!btn) return;
+            const v = btn.getAttribute('data-veh');
+            if (zoneWeekState.vehs.has(v)) zoneWeekState.vehs.delete(v);
+            else zoneWeekState.vehs.add(v);
+            renderZoneWeekModule();
+        });
+        document.getElementById('zw-all').addEventListener('click', () => {
+            zoneWeekState.vehs = new Set(currentData.filter(r => !!r.vehiculo).map(r => r.vehiculo));
+            renderZoneWeekModule();
+        });
+        document.getElementById('zw-none').addEventListener('click', () => {
+            zoneWeekState.vehs = new Set();
+            renderZoneWeekModule();
+        });
+        document.getElementById('zw-search').addEventListener('input', (e) => {
+            zoneWeekState.search = e.target.value;
+            renderVehicleChips(Array.from(new Set(currentData.filter(r => !!r.vehiculo).map(r => r.vehiculo)))
+                .sort(function (a, b) { return compareVehicles([a], [b]); }));
+        });
+
+        document.getElementById('idle-sort').addEventListener('change', (e) => {
+            idleDaysState.sort = e.target.value;
+            renderIdleDaysModule();
+        });
+        document.getElementById('idle-search').addEventListener('input', (e) => {
+            idleDaysState.search = e.target.value;
+            renderIdleDaysModule();
+        });
+        // Clic en una fila del listado: despliega/pliega los días sin servicio de ese móvil.
+        document.getElementById('idle-table-body').addEventListener('click', (e) => {
+            const tr = e.target.closest('tr.idle-row');
+            if (!tr) return;
+            const v = tr.getAttribute('data-veh');
+            idleDaysState.openVeh = idleDaysState.openVeh === v ? null : v;
+            renderIdleDaysModule();
+        });
+        // Clic en un móvil del banner de alerta: abre su detalle y lo lleva a la vista.
+        document.getElementById('idle-alert-text').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-veh]');
+            if (!btn) return;
+            const v = btn.getAttribute('data-veh');
+            idleDaysState.search = '';
+            document.getElementById('idle-search').value = '';
+            idleDaysState.openVeh = v;
+            renderIdleDaysModule();
+            const row = Array.from(document.querySelectorAll('#idle-table-body tr.idle-row'))
+                .find(tr => tr.getAttribute('data-veh') === v);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        let searchDebounce = null;
+        document.getElementById('table-search').addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(renderRawTable, 220);
+        });
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-indigo-700', 'shadow-sm', 'active');
+                btn.classList.add('text-slate-600');
+            });
+
+            const panel = document.getElementById(tabId);
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.add('bg-white', 'text-indigo-700', 'shadow-sm', 'active');
+            activeBtn.classList.remove('text-slate-600');
+
+            window.dispatchEvent(new Event('resize'));
+
+            // La barra de pestañas queda fija, así que sin este salto quedaría leyendo el final de la
+            // parte anterior. Se alinea al inicio del panel, justo debajo de lo pegado, no del borde
+            // de la ventana. Se salta el ajuste cuando ya está bien alineado: un scrollY de 1 px hace
+            // que el navegador reenganche el scroll y pierda la posición.
+            const strip = document.getElementById('sticky-strip');
+            const hdr = document.querySelector('header');
+            const sheet = document.getElementById('sheet-selector-container');
+            const debajoDeLoFijo = (hdr ? hdr.offsetHeight : 0)
+                + (sheet && !sheet.classList.contains('hidden') ? sheet.offsetHeight : 0)
+                + (strip ? strip.offsetHeight : 0) + 12;
+            const y = Math.max(0, Math.round(window.scrollY + panel.getBoundingClientRect().top - debajoDeLoFijo));
+            if (Math.abs(y - window.scrollY) > 4) window.scrollTo(0, y);
+        }
+
+        function showLoading(text) {
+            document.getElementById('loading-detail').textContent = text || 'Leyendo hojas';
+            const el = document.getElementById('loading-overlay');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+        function hideLoading() {
+            const el = document.getElementById('loading-overlay');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+        const nextFrame = () => new Promise(r => setTimeout(r, 30));
+
+        // ==================== CARGA DEL ARCHIVO ====================
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (typeof XLSX === 'undefined') {
+                alert('No se pudo cargar la librería de Excel (SheetJS). Verifica la conexión a internet y recarga la página.');
+                return;
+            }
+
+            document.getElementById('file-name').textContent = file.name;
+            showLoading('Leyendo ' + file.name);
+            await nextFrame();
+
+            let workbook;
+            try {
+                const buffer = await file.arrayBuffer();
+                // raw:true entrega números y series de fecha sin formatear: evita perder cifras y transponer día/mes.
+                workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true, cellNF: false });
+            } catch (err) {
+                hideLoading();
+                alert('El archivo no se pudo leer como Excel.\n\n' + (err && err.message ? err.message : err));
+                e.target.value = '';
+                return;
+            }
+
+            workbookData = {};
+            sheetMeta = {};
+            warnings = [];
+            duplicateCS = new Set();
+
+            const skipped = [];
+            const emptySheets = [];
+            for (const sheetName of workbook.SheetNames) {
+                showLoading('Procesando hoja: ' + sheetName);
+                await nextFrame();
+
+                const result = parseSheet(workbook.Sheets[sheetName], sheetName);
+                if (!result) { skipped.push(sheetName); continue; }
+                if (result.rows.length === 0) { emptySheets.push(sheetName); continue; }
+                workbookData[sheetName] = result.rows;
+                sheetMeta[sheetName] = result.meta;
+            }
+
+            const validSheets = Object.keys(workbookData);
+            if (validSheets.length === 0) {
+                hideLoading();
+                alert('No se encontró ninguna hoja con datos de traslados.\n\nSe esperaban encabezados como CS, Fecha, Paciente, Vehiculo.\nHojas revisadas: ' + workbook.SheetNames.join(', '));
+                e.target.value = '';
+                return;
+            }
+
+            if (skipped.length) {
+                warnings.push('Se omitieron ' + skipped.length + ' hoja(s) sin columnas reconocibles de traslados: <strong>' + skipped.map(escapeHtml).join(', ') + '</strong>. Sus filas no se suman a ningún total.');
+            }
+            if (emptySheets.length) {
+                warnings.push('La(s) hoja(s) <strong>' + emptySheets.map(escapeHtml).join(', ') + '</strong> tienen encabezados pero ninguna fila de datos.');
+            }
+
+            detectDuplicates();
+            collectVehicleFormatWarnings();
+            collectHiddenRowWarnings();
+
+            const totalRows = validSheets.reduce((s, n) => s + sheetMeta[n].total, 0);
+            document.getElementById('sheets-count').textContent = validSheets.length + ' hoja(s) • ' + fmtNum(totalRows) + ' registros';
+            document.getElementById('file-info').classList.remove('hidden');
+
+            extractAvailableStatuses();
+
+            selectedVehicles.clear();
+            vehiclesInitialized = false;
+            idleDaysState.openVeh = null;   // archivo nuevo: el detalle abierto se cierra
+
+            document.getElementById('placeholder-state').classList.add('hidden');
+            document.getElementById('sheet-selector-container').classList.remove('hidden');
+            document.getElementById('dashboard-body').classList.remove('hidden');
+            document.getElementById('dashboard-body').classList.add('flex');
+
+            activeSheet = 'GLOBAL';
+            setupSheetButtons();
+            renderWarnings();
+
+            showLoading('Dibujando gráficos');
+            await nextFrame();
+            try {
+                updateDashboard();
+            } catch (err) {
+                // Sin esto, un solo gráfico que falle deja el velo de "Dibujando gráficos" puesto para siempre
+                // y el tablero parece colgado aunque los datos sí hayan cargado.
+                warnings.push('<strong>Un módulo no se pudo dibujar:</strong> ' +
+                    escapeHtml(err && err.message ? err.message : String(err)) +
+                    '. El resto del tablero quedó cargado igualmente.');
+                renderWarnings();
+            } finally {
+                hideLoading();
+            }
+
+            e.target.value = '';
+        }
+
+        function parseSheet(ws, sheetName) {
+            if (!ws || !ws['!ref']) return null;
+
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const nCols = range.e.c + 1;
+            const colLetters = [];
+            for (let C = 0; C < nCols; C++) colLetters.push(XLSX.utils.encode_col(C));
+
+            const readRow = (R) => {
+                const arr = new Array(nCols).fill(null);
+                const suffix = R + 1;
+                for (let C = 0; C < nCols; C++) {
+                    const cell = ws[colLetters[C] + suffix];
+                    if (cell && cell.v !== undefined && cell.v !== null) arr[C] = cell.v;
+                }
+                return arr;
+            };
+
+            const rowHasData = arr => arr.some(v => v !== null && String(v).trim() !== '');
+
+            // Buscar la fila de encabezado entre las 10 primeras.
+            let headerRow = -1, colMap = null;
+            const scanEnd = Math.min(range.s.r + 9, range.e.r);
+            for (let R = range.s.r; R <= scanEnd; R++) {
+                const cells = readRow(R).map(normHeader);
+                const map = buildColumnMap(cells);
+                if (map.fecha !== undefined && (map.cs !== undefined || map.paciente !== undefined)) {
+                    headerRow = R; colMap = map; break;
+                }
+            }
+
+            let usingLegacy = false;
+            if (headerRow === -1) {
+                // Sin encabezados reconocibles: usar el layout estándar si al menos parece una hoja de servicios.
+                const probe = readRow(range.s.r + 1);
+                if (!rowHasData(probe)) return null;
+                if (parseFecha(probe[LEGACY_INDEX.fecha]) === null) return null;
+                headerRow = range.s.r;
+                colMap = Object.assign({}, LEGACY_INDEX);
+                usingLegacy = true;
+                warnings.push('La hoja <strong>' + escapeHtml(sheetName) + '</strong> no tiene encabezados reconocibles; se usaron las posiciones estándar (CS=A, Fecha=B, Vehículo=I, Ciudad Origen=AC, Valor=AL). Revisa que los datos tengan sentido.');
+            } else if (headerRow !== range.s.r) {
+                warnings.push('La hoja <strong>' + escapeHtml(sheetName) + '</strong> tiene el encabezado en la fila ' + (headerRow + 1) + ', no en la 1.');
+            }
+
+            // El archivo real trae la columna de dinero (AL) con el encabezado en blanco y
+            // con "--" en algunas filas: sin este respaldo los totales en pesos salen en $0.
+            if (colMap.valor === undefined && !usingLegacy && LEGACY_INDEX.valor < nCols) {
+                const letter = XLSX.utils.encode_col(LEGACY_INDEX.valor);
+                let filled = 0, numeric = 0, withLetters = 0;
+                for (let R = headerRow + 1; R <= Math.min(headerRow + 300, range.e.r); R++) {
+                    const cell = ws[letter + (R + 1)];
+                    if (!cell || cell.v === undefined || cell.v === null || String(cell.v).trim() === '') continue;
+                    filled++;
+                    const s = String(cell.v).trim();
+                    if (typeof cell.v === 'number' ? isFinite(cell.v) : /^[-+]?[\d.,\s$]+$/.test(s)) numeric++;
+                    if (/[a-z]/i.test(s)) withLetters++;
+                }
+                if (filled > 0 && withLetters === 0 && numeric >= filled / 2) {
+                    colMap.valor = LEGACY_INDEX.valor;
+                    warnings.push('La columna de dinero de <strong>' + escapeHtml(sheetName) + '</strong> (' + letter + ') tiene el <strong>encabezado en blanco</strong>; se tomó por su posición. Ponle un título en el Excel (por ejemplo "valor") para que se detecte sola.');
+                }
+            }
+
+            const pick = (arr, field) => {
+                const idx = colMap[field];
+                return idx === undefined ? null : arr[idx];
+            };
+
+            const rowsInfo = Array.isArray(ws['!rows']) ? ws['!rows'] : null;
+            const filtro = ws['!autofilter'] && ws['!autofilter'].ref ? String(ws['!autofilter'].ref) : null;
+            const rows = [];
+            let hiddenWithData = 0, sinVehiculo = 0, sinFecha = 0, total = 0, skippedEmpty = 0;
+
+            for (let R = headerRow + 1; R <= range.e.r; R++) {
+                const raw = readRow(R);
+                if (!rowHasData(raw)) { skippedEmpty++; continue; }
+
+                total++;
+                if (rowsInfo && rowsInfo[R] && rowsInfo[R].hidden) hiddenWithData++;
+
+                const vehiculoRaw = cleanText(pick(raw, 'vehiculo'));
+                const vehiculo = normalizeVehicle(vehiculoRaw);
+                if (!vehiculo) sinVehiculo++;
+
+                const fechaStr = parseFecha(pick(raw, 'fecha'));
+                if (!fechaStr) sinFecha++;
+
+                rows.push({
+                    cs: cleanText(pick(raw, 'cs')),
+                    rowNum: R + 1,
+                    hoja: sheetName,
+                    fechaStr,
+                    hora: parseHora(pick(raw, 'hora')),
+                    horaLlegada: parseHora(pick(raw, 'horaLlegada')),
+                    estado: cleanText(pick(raw, 'estado'), 'Sin Estado'),
+                    paciente: cleanText(pick(raw, 'paciente'), 'Sin Nombre'),
+                    documento: cleanText(pick(raw, 'documento')),
+                    origen: cleanText(pick(raw, 'origen')),
+                    destino: cleanText(pick(raw, 'destino')),
+                    vehiculo,
+                    vehiculoRaw,
+                    placa: cleanText(pick(raw, 'placa')),
+                    conductor: cleanText(pick(raw, 'conductor')),
+                    ciudadOrigen: cleanText(pick(raw, 'ciudadOrigen'), 'Sin Zona'),
+                    ciudadDestino: cleanText(pick(raw, 'ciudadDestino')),
+                    zonaPaciente: cleanText(pick(raw, 'zonaPaciente')),
+                    empresa: cleanText(pick(raw, 'empresa')),
+                    proposito: cleanText(pick(raw, 'proposito')),
+                    tipoViaje: cleanText(pick(raw, 'tipoViaje')),
+                    tipo: cleanText(pick(raw, 'tipo')),
+                    valor: parseMoney(pick(raw, 'valor'))
+                });
+            }
+
+            const missing = FIELD_ALIASES.map(f => f[0]).filter(f => colMap[f] === undefined);
+            const important = ['fecha', 'estado', 'paciente', 'vehiculo', 'valor', 'ciudadOrigen'];
+            const missingImportant = important.filter(f => missing.indexOf(f) !== -1);
+            if (missingImportant.length && !usingLegacy) {
+                warnings.push('En la hoja <strong>' + escapeHtml(sheetName) + '</strong> no se encontró la columna: ' + missingImportant.map(escapeHtml).join(', ') + '. Esos campos salen vacíos.');
+            }
+            if (sinFecha > 0) {
+                warnings.push('En <strong>' + escapeHtml(sheetName) + '</strong> hay ' + fmtNum(sinFecha) + ' fila(s) con fecha ilegible o vacía; no entran a las gráficas por día ni al promedio.');
+            }
+
+            return {
+                rows,
+                meta: { total, sinVehiculo, sinFecha, ocultas: hiddenWithData, skippedEmpty, usingLegacy, filtro, colMap }
+            };
+        }
+
+        // "45", "0045" y " 45 " son la misma móvil; "MOVIL 31" se conserva como texto.
+        function normalizeVehicle(v) {
+            const s = cleanText(v);
+            if (!s) return '';
+            const lower = s.toLowerCase();
+            if (['nan', 'none', 'null', '-', 'n/a', 'nd', 's/n'].indexOf(lower) !== -1) return '';
+            if (/sin asignar|no asignado|sin movil|sin vehículo|sin vehiculo/.test(lower)) return '';
+            if (/^\d+$/.test(s)) return String(parseInt(s, 10)).padStart(4, '0');
+            return s;
+        }
+
+        // Las móviles se guardan como texto "0000", así que un localeCompare normal encimaría 0783 con 07830.
+        // Se ordena por valor numérico y al final las que no son puro número ("MOVIL 31", placas, etc.).
+        function vehicleNumber(v) {
+            const s = String(v).trim();
+            return /^\d+$/.test(s) ? parseInt(s, 10) : null;
+        }
+
+        function compareVehicles(a, b) {
+            const na = vehicleNumber(a[0]), nb = vehicleNumber(b[0]);
+            if (na !== null && nb !== null) return na - nb || String(a[0]).localeCompare(String(b[0]));
+            if (na !== null) return -1;
+            if (nb !== null) return 1;
+            return String(a[0]).localeCompare(String(b[0]), 'es', { numeric: true });
+        }
+
+        function detectDuplicates() {
+            const seen = new Map();
+            Object.values(workbookData).forEach(rows => {
+                rows.forEach(r => {
+                    const key = (r.cs || '').trim();
+                    if (!key) return;
+                    if (seen.has(key)) duplicateCS.add(key);
+                    else seen.set(key, r.hoja + ' fila ' + r.rowNum);
+                });
+            });
+            if (duplicateCS.size > 0) {
+                warnings.push('Se encontraron <strong>' + fmtNum(duplicateCS.size) + ' consecutivo(s) CS repetido(s)</strong>. Están marcados en rojo en la Parte 4 y se cuentan dos veces en todos los totales: ' +
+                    Array.from(duplicateCS).slice(0, 8).map(escapeHtml).join(', ') + (duplicateCS.size > 8 ? '…' : ''));
+            }
+        }
+
+        function collectVehicleFormatWarnings() {
+            const byNormalized = new Map();
+            Object.values(workbookData).forEach(rows => {
+                rows.forEach(r => {
+                    if (!r.vehiculo || !r.vehiculoRaw) return;
+                    if (!byNormalized.has(r.vehiculo)) byNormalized.set(r.vehiculo, new Set());
+                    byNormalized.get(r.vehiculo).add(r.vehiculoRaw.trim());
+                });
+            });
+            const collisions = Array.from(byNormalized.entries()).filter(([, raws]) => raws.size > 1);
+            if (collisions.length) {
+                warnings.push('El número de móvil viene escrito de varias formas en el Excel y se unificó. Ejemplos: ' +
+                    collisions.slice(0, 5).map(([n, raws]) => '<strong>' + escapeHtml(n) + '</strong> ← ' + Array.from(raws).slice(0, 4).map(escapeHtml).join(' / ')).join('; ') +
+                    '. Verifica que sean realmente la misma móvil.');
+            }
+        }
+
+        function collectHiddenRowWarnings() {
+            Object.keys(sheetMeta).forEach(name => {
+                const m = sheetMeta[name];
+                if (m.ocultas > 0) {
+                    warnings.push('La hoja <strong>' + escapeHtml(name) + '</strong> tiene ' + fmtNum(m.ocultas) + ' de ' + fmtNum(m.total) +
+                        ' filas <strong>ocultas por un filtro de Excel</strong>. Este dashboard las <strong>incluye todas</strong>: si en Excel ves menos filas, la diferencia es el filtro, no un error de conteo.');
+                } else if (m.filtro) {
+                    // SheetJS no entrega qué filas están ocultas, pero sí el rango del autofiltro.
+                    warnings.push('La hoja <strong>' + escapeHtml(name) + '</strong> tiene un <strong>filtro de Excel activo</strong> sobre ' + escapeHtml(m.filtro) +
+                        '. Este dashboard cuenta las <strong>' + fmtNum(m.total) + ' filas con datos</strong> de todo ese rango, incluidas las que el filtro oculta en Excel: si allá ves menos filas, la diferencia es el filtro, no un error de conteo.');
+                }
+            });
+        }
+
+        function renderWarnings() {
+            const banner = document.getElementById('warnings-banner');
+            const list = document.getElementById('warnings-list');
+            list.innerHTML = '';
+            if (warnings.length === 0) { banner.classList.add('hidden'); return; }
+            warnings.forEach(w => {
+                const li = document.createElement('li');
+                li.innerHTML = w;
+                list.appendChild(li);
+            });
+            banner.classList.remove('hidden');
+        }
+
+        // ==================== ESTADOS ====================
+        // Solo Cancelado/Anulado quedan desmarcados al cargar y son los únicos que se pintan en rojo.
+        const EXCLUDED_STATUS_RE = /^(cancelad|anulad)/;
+
+        function extractAvailableStatuses() {
+            const counts = new Map();
+            Object.values(workbookData).forEach(rows => {
+                rows.forEach(r => {
+                    const st = r.estado || 'Sin Estado';
+                    counts.set(st, (counts.get(st) || 0) + 1);
+                });
+            });
+
+            statusCounts = Object.fromEntries(counts);
+            availableStatuses = Array.from(counts.keys()).sort((a, b) => counts.get(b) - counts.get(a));
+            selectedStatuses = new Set(
+                availableStatuses.filter(st => !EXCLUDED_STATUS_RE.test(stripAccents(st).toLowerCase()))
+            );
+
+            renderStatusCheckboxes();
+        }
+
+        function renderStatusCheckboxes() {
+            const container = document.getElementById('status-checkboxes');
+            container.innerHTML = '';
+
+            availableStatuses.forEach((st, i) => {
+                const isChecked = selectedStatuses.has(st);
+                const isCancelled = EXCLUDED_STATUS_RE.test(stripAccents(st).toLowerCase());
+
+                const label = document.createElement('label');
+                label.className = 'cursor-pointer select-none px-2 py-1 rounded-md font-medium flex items-center gap-1.5 transition-all ' +
+                    (isChecked
+                        ? 'bg-indigo-100 text-indigo-800 font-bold'
+                        : (isCancelled ? 'bg-rose-100 text-rose-800 font-bold' : 'bg-slate-200 text-slate-500'));
+
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.value = st;
+                input.checked = isChecked;
+                input.className = 'rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer';
+                input.addEventListener('change', (e) => {
+                    if (e.target.checked) selectedStatuses.add(st);
+                    else selectedStatuses.delete(st);
+                    renderStatusCheckboxes();
+                    updateDashboard();
+                });
+
+                const span = document.createElement('span');
+                span.textContent = st + ' (' + fmtNum(statusCounts[st]) + ')';
+
+                label.appendChild(input);
+                label.appendChild(span);
+                container.appendChild(label);
+            });
+        }
+
+        function setupSheetButtons() {
+            const container = document.getElementById('sheet-buttons');
+            container.innerHTML = '';
+            const sheetNames = Object.keys(workbookData);
+
+            const makeBtn = (caption, target, count) => {
+                const btn = document.createElement('button');
+                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all ' +
+                    (activeSheet === target ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200');
+                btn.textContent = count === undefined ? caption : caption + ' (' + fmtNum(count) + ')';
+                btn.onclick = () => {
+                    activeSheet = target;
+                    selectedVehicles.clear();
+                    vehiclesInitialized = false;
+                    idleDaysState.openVeh = null;   // cada hoja muestra todos sus móviles, como el módulo 4
+                    setupSheetButtons();
+                    updateDashboard();
+                };
+                return btn;
+            };
+
+            if (sheetNames.length > 1) {
+                const globalTotal = sheetNames.reduce((s, n) => s + sheetMeta[n].total, 0);
+                container.appendChild(makeBtn('Todas las Hojas (Acumulado)', 'GLOBAL', globalTotal));
+            }
+            sheetNames.forEach(n => container.appendChild(makeBtn(n, n, sheetMeta[n].total)));
+        }
+
+        // ==================== FILTRADO ====================
+        function getActiveRows() {
+            if (activeSheet === 'GLOBAL') {
+                const out = [];
+                Object.values(workbookData).forEach(arr => { for (let i = 0; i < arr.length; i++) out.push(arr[i]); });
+                return out;
+            }
+            return workbookData[activeSheet] || [];
+        }
+
+        // Registros que alimentan los gráficos: estado marcado y con móvil asignado.
+        function getFilteredData() {
+            return getActiveRows().filter(r => selectedStatuses.has(r.estado) && r.vehiculo);
+        }
+
+        // El encabezado, la barra de hojas y la franja de KPIs+pestañas se apilan fijados arriba.
+        // Cada uno se pega debajo del anterior midiendo alturas reales: los botones de hoja y los
+        // KPIs reenvuelven según el ancho, así que un valor fijo en el CSS no sirve.
+        function layoutStickyTop() {
+            const hdr = document.querySelector('header');
+            const sheet = document.getElementById('sheet-selector-container');
+            const strip = document.getElementById('sticky-strip');
+            const rail = document.getElementById('kpi-rail');
+            if (!hdr || !sheet) return;
+            const h = hdr.offsetHeight;
+            sheet.style.top = h + 'px';
+            const bajoBarra = (h + sheet.offsetHeight) + 'px';
+            if (strip) strip.style.top = bajoBarra;
+            if (rail) rail.style.top = bajoBarra;
+        }
+        window.addEventListener('resize', layoutStickyTop);
+
+        function updateDashboard() {
+            currentData = getFilteredData();
+
+            updateKPIs();
+            renderDailyChart();
+            renderBellChart();
+            renderZonesModule();
+            renderUsersChartDynamicHeight();
+            renderFrequencySummary();
+            renderRecurrentUsersByZoneModule();
+            renderVehiclesChartInteractive();
+            renderZoneWeekModule();
+            renderIdleDaysModule();
+            renderRawTable();
+            layoutStickyTop();
+        }
+
+        // ==================== KPIs ====================
+        function updateKPIs() {
+            const activeRows = getActiveRows();
+            const data = currentData;
+
+            document.getElementById('kpi-total').textContent = fmtNum(activeRows.length);
+            document.getElementById('kpi-validos').textContent = fmtNum(data.length);
+
+            // "Usu. Domicilio" son personas, no registros: 5.538 recogidas son muchos menos pacientes
+            // distintos. Se deduce con patientKey, la misma llave del módulo de zonas y del ranking.
+            const usuariosDomicilio = new Set(data.filter(r => isDomicilio(r.origen)).map(patientKey)).size;
+            document.getElementById('kpi-domicilio').textContent = fmtNum(usuariosDomicilio);
+
+            const totalValor = data.reduce((sum, r) => sum + r.valor, 0);
+            document.getElementById('kpi-valor').textContent = fmtMoney(totalValor);
+
+            const sub = document.getElementById('kpi-promedio-sub');
+            const range = getDateRange(data);
+            document.getElementById('range-info').textContent = range
+                ? 'Rango: ' + range.min.split('-').reverse().join('/') + ' → ' + range.max.split('-').reverse().join('/')
+                : 'Sin fechas';
+
+            if (!range) {
+                document.getElementById('kpi-promedio').textContent = '0.0';
+                sub.textContent = 'Sin fechas válidas';
+                return;
+            }
+
+            const stats = computeAverage(data, range);
+            document.getElementById('kpi-promedio').textContent = stats.avg.toFixed(1);
+            sub.textContent = includeNonBizInAverage
+                ? stats.days + ' días (con sáb/dom/festivos)'
+                : stats.days + ' días hábiles sin festivos';
+        }
+
+        function isDomicilio(origen) {
+            return normHeader(origen) === 'domicilio';
+        }
+
+        function getDateRange(data) {
+            let min = null, max = null;
+            for (const r of data) {
+                if (!r.fechaStr) continue;
+                if (min === null || r.fechaStr < min) min = r.fechaStr;
+                if (max === null || r.fechaStr > max) max = r.fechaStr;
+            }
+            return min ? { min, max } : null;
+        }
+
+        // Recorre TODOS los días del rango: un día hábil sin servicios también divide.
+        function computeAverage(data, range) {
+            const counts = new Map();
+            for (const r of data) {
+                if (!r.fechaStr) continue;
+                counts.set(r.fechaStr, (counts.get(r.fechaStr) || 0) + 1);
+            }
+
+            let days = 0, total = 0;
+            const cur = isoToDateUTC(range.min);
+            const end = isoToDateUTC(range.max);
+            while (cur <= end) {
+                const iso = isoUTC(cur);
+                if (includeNonBizInAverage || isBusinessDay(iso)) {
+                    days++;
+                    total += counts.get(iso) || 0;
+                }
+                cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+            return { days, total, avg: days > 0 ? total / days : 0 };
+        }
+
+        // ==================== PARTE 1: GRÁFICA DIARIA ====================
+        function bucketOf(iso, gran) {
+            if (gran === 'month') return iso.slice(0, 7);
+            if (gran === 'week') {
+                const d = isoToDateUTC(iso);
+                d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));   // lunes
+                return isoUTC(d);
+            }
+            return iso;
+        }
+
+        function renderDailyChart() {
+            const data = currentData;
+            const range = getDateRange(data);
+
+            if (chartDailyInstance) { chartDailyInstance.destroy(); chartDailyInstance = null; }
+            const ctx = document.getElementById('chart-daily').getContext('2d');
+
+            if (!range) {
+                chartDailyInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: ['Sin fechas válidas'], datasets: [{ label: 'Servicios', data: [0], backgroundColor: '#cbd5e1' }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+                return;
+            }
+
+            const gran = dailyGranularity;
+            const buckets = new Map();     // key -> { count, bizDays, bizCount, start, end }
+            const cur = isoToDateUTC(range.min);
+            const end = isoToDateUTC(range.max);
+
+            while (cur <= end) {
+                const iso = isoUTC(cur);
+                const key = bucketOf(iso, gran);
+                if (!buckets.has(key)) buckets.set(key, { count: 0, days: 0, bizDays: 0, bizCount: 0, start: iso, end: iso });
+                const b = buckets.get(key);
+                b.end = iso;
+                b.days++;
+                if (isBusinessDay(iso)) b.bizDays++;
+                cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+
+            data.forEach(r => {
+                if (!r.fechaStr) return;
+                const key = bucketOf(r.fechaStr, gran);
+                const b = buckets.get(key);
+                if (b) { b.count++; if (isBusinessDay(r.fechaStr)) b.bizCount++; }
+            });
+
+            const keys = Array.from(buckets.keys()).sort();
+            const avgStats = computeAverage(data, range);
+            const avgPerBizDay = avgStats.avg;
+
+            const labels = [];
+            const barData = [];
+            const barColors = [];
+            const lineData = [];
+            const tooltips = [];
+
+            keys.forEach(key => {
+                const b = buckets.get(key);
+
+                if (gran === 'day') {
+                    const p = key.split('-').map(Number);
+                    labels.push(pad2(p[2]) + '/' + pad2(p[1]) + '/' + p[0] + dayTag(key));
+                    barColors.push(isNonBusiness(key) ? '#fdba74' : '#a5b4fc');
+                    lineData.push(avgPerBizDay);
+                    const h = holidayName(key);
+                    tooltips.push(h ? 'Festivo: ' + h : (isNonBusiness(key) ? 'Día no hábil' : 'Día hábil'));
+                } else if (gran === 'week') {
+                    const f = s => { const p = s.split('-'); return p[2] + '/' + p[1]; };
+                    labels.push('Sem ' + f(b.start) + ' → ' + f(b.end));
+                    barColors.push('#a5b4fc');
+                    lineData.push(avgPerBizDay * (includeNonBizInAverage ? b.days : b.bizDays));
+                    tooltips.push((includeNonBizInAverage ? b.days : b.bizDays) + (includeNonBizInAverage ? ' días en la semana' : ' días hábiles en la semana'));
+                } else {
+                    const p = key.split('-');
+                    labels.push(MESES[+p[1] - 1] + ' ' + p[0]);
+                    barColors.push('#a5b4fc');
+                    lineData.push(avgPerBizDay * (includeNonBizInAverage ? b.days : b.bizDays));
+                    tooltips.push((includeNonBizInAverage ? b.days : b.bizDays) + (includeNonBizInAverage ? ' días en el mes' : ' días hábiles en el mes'));
+                }
+                barData.push(b.count);
+            });
+
+            // La barra más alta se pinta más oscura para que el pico se vea de un vistazo. Se oscurece
+            // cada barra en SU propio color: si el pico cae en un día no hábil seguiría naranja, porque
+            // pintarlo de morado borraría la señal de que ese día no fue hábil.
+            const esNoHabil = barColors.map(c => c === '#fdba74');
+            const maxBar = Math.max.apply(null, barData);
+            // Lo mismo dentro del grupo naranja: el día no hábil que más servicios movió se oscurece
+            // contra sus pares, así un fin de semana atípico se ve sin confundirse con un pico hábil.
+            const maxNoHabil = Math.max.apply(null, barData.filter((v, i) => esNoHabil[i]));
+            barData.forEach(function (v, i) {
+                if (v > 0 && v === maxBar) barColors[i] = esNoHabil[i] ? '#b45309' : '#3730a3';
+                else if (v > 0 && esNoHabil[i] && v === maxNoHabil) barColors[i] = '#b45309';
+            });
+
+            // --- Tendencia medida sobre las MISMAS barras que se dibujan. Si se calculara aparte,
+            // el veredicto desmentiría el promedio que está en la misma gráfica.
+            const inicioRango = isoToDateUTC(buckets.get(keys[0]).start);
+            const xs = keys.map(k => Math.round((isoToDateUTC(buckets.get(k).start) - inicioRango) / 86400000));
+            // La recta se ajusta sobre la TASA de servicios por día de la población, no sobre el total de
+            // cada barra: con semanas y meses recortados por los bordes del rango, los totales compararían
+            // una semana de 5 días hábiles con una de 1 y la recta bajaría sin que la operación baje.
+            const diasEnPoblacion = b => includeNonBizInAverage ? b.days : b.bizDays;
+            const fit = [];
+            keys.forEach(function (k, i) {
+                const b = buckets.get(k);
+                if (diasEnPoblacion(b) > 0) fit.push({ i: i, x: xs[i], y: (includeNonBizInAverage ? b.count : b.bizCount) / diasEnPoblacion(b) });
+            });
+            const nombreBucket = gran === 'day' ? 'día' : gran === 'week' ? 'semana' : 'mes';
+            const pluralBucket = gran === 'day' ? 'días' : gran === 'week' ? 'semanas' : 'meses';
+            const nombrePuntos = includeNonBizInAverage ? pluralBucket
+                : (gran === 'day' ? 'días hábiles' : pluralBucket + ' (solo sus hábiles)');
+            // La tasa siempre es por día, se agrupe como se agrupe; así el veredicto no cambia de unidades.
+            const unidadTasa = ' por ' + (includeNonBizInAverage ? 'día' : 'día hábil');
+            const recta = fit.length >= 3 ? rectaTendencia(fit.map(p => p.y), fit.map(p => p.x)) : null;
+            const r1 = v => Math.round(v * 10) / 10;
+            // Para dibujarla sobre las barras se devuelve la tasa a los días de cada barra, igual que hace
+            // la línea de promedio esperado.
+            const rectaPts = recta ? keys.map(function (k, i) {
+                const dias = diasEnPoblacion(buckets.get(k));
+                return dias > 0 ? r1((recta.primero + recta.pend * xs[i]) * dias) : null;
+            }) : [];
+
+            const promedioNombre = includeNonBizInAverage ? 'Promedio de todos los días' : 'Promedio hábil';
+            const lineLabel = gran === 'day'
+                ? promedioNombre + ': ' + avgPerBizDay.toFixed(1) + ' serv/día'
+                : 'Esperado según ' + promedioNombre.toLowerCase() + ' (' + avgPerBizDay.toFixed(1) + '/día)';
+
+            chartDailyInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: lineLabel,
+                            data: lineData,
+                            borderColor: '#ef4444',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            fill: false,
+                            pointRadius: 0,
+                            order: 1
+                        },
+                        {
+                            type: 'line',
+                            label: 'Recta de tendencia (mínimos cuadrados)',
+                            data: rectaPts,
+                            borderColor: '#0f766e',
+                            borderWidth: 3,
+                            fill: false,
+                            pointRadius: 0,
+                            spanGaps: true,
+                            order: 0
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Cantidad de Servicios',
+                            data: barData,
+                            backgroundColor: barColors,
+                            borderRadius: 6,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                afterBody: (items) => {
+                                    const t = tooltips[items[0].dataIndex];
+                                    return t ? [t, includeNonBizInAverage
+                                        ? 'Día no hábil INCLUIDO en el promedio'
+                                        : 'Día no hábil EXCLUIDO del promedio hábil'] : [];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, title: { display: true, text: 'Servicios' } },
+                        x: { grid: { display: false }, ticks: { maxRotation: 60, minRotation: 0, autoSkip: gran !== 'day', font: { size: 11 } } }
+                    }
+                }
+            });
+
+            // --- Chips del veredicto: salen de la recta recién dibujada y de la misma población de las barras.
+            const ver = document.getElementById('trend-verdict');
+            const excluidos = keys.length - fit.length;
+            const totalPoblacion = fit.reduce(function (s, p) {
+                const b = buckets.get(keys[p.i]);
+                return s + (includeNonBizInAverage ? b.count : b.bizCount);
+            }, 0);
+
+            if (!recta) {
+                ver.innerHTML = trendChip('Solo ' + fit.length + ' ' + (fit.length === 1 ? nombreBucket : pluralBucket) +
+                    ' en la población medida: no alcanza para una recta', '#475569');
+                return;
+            }
+
+            // El promedio de referencia es el de la línea roja de la gráfica, no una media nueva: si el
+            // chip dijera otro número, la tarjeta se desmentiría a sí misma.
+            const pctRecta = avgPerBizDay > 0 ? ((recta.ultimo - recta.primero) / avgPerBizDay) * 100 : 0;
+            const sube = pctRecta >= 10;
+            const baja = pctRecta <= -10;
+            const color = sube ? '#059669' : baja ? '#d97706' : '#475569';
+            const direccion = sube ? 'LA OPERACIÓN CRECE' : baja ? 'LA OPERACIÓN SE REDUCE' : 'OPERACIÓN PLANA';
+
+            // Tasa media de cada semana calendario, ponderada por los días que aporta cada barra.
+            const sem = new Map();
+            fit.forEach(function (p) {
+                const iso = keys[p.i];
+                const dt = isoToDateUTC(iso);
+                const lunes = new Date(dt);
+                lunes.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+                const clave = isoUTC(lunes);
+                const dias = diasEnPoblacion(buckets.get(iso));
+                const s = sem.get(clave) || { inicio: iso, suma: 0, dias: 0 };
+                s.suma += p.y * dias; s.dias += dias;
+                sem.set(clave, s);
+            });
+            const textoSemanas = Array.from(sem.values()).sort(function (a, b) { return a.inicio < b.inicio ? -1 : 1; })
+                .map(function (s) { return shortDate(s.inicio) + ': ' + fmtNum(s.suma / s.dias) + ' (' + s.dias + (s.dias === 1 ? ' día' : ' días') + ')'; })
+                .join('  →  ');
+
+            ver.innerHTML =
+                trendChip(direccion, color) +
+                trendChip('La recta va de ' + recta.primero.toFixed(0) + ' a ' + recta.ultimo.toFixed(0) +
+                    ' servicios' + unidadTasa + ' (' + (pctRecta >= 0 ? '+' : '') + pctRecta.toFixed(1) +
+                    '% sobre el promedio de ' + avgPerBizDay.toFixed(0) + ')', color) +
+                trendChip('Pendiente: ' + (recta.pend >= 0 ? '+' : '') + (recta.pend * 7).toFixed(1) +
+                    ' servicios' + unidadTasa + ' cada semana', '#0f766e') +
+                trendChip('Tasa media por semana: ' + textoSemanas, '#4338ca') +
+                trendChip(fmtNum(totalPoblacion) + ' servicios en ' + fmtNum(fit.length) + ' ' + nombrePuntos +
+                    (excluidos ? ' · ' + fmtNum(excluidos) + ' fuera de la población' : ''), '#334155');
+        }
+
+        // ==================== AYUDANTES DE TENDENCIA ====================
+        // Recta por mínimos cuadrados. xs son las posiciones en días calendario; hace falta pasarlas
+        // cuando la serie salta días (hábiles only), si no la "pendiente semanal" contaría saltos.
+        function rectaTendencia(ys, xs) {
+            const n = ys.length;
+            if (n < 2) return null;
+            const X = xs || ys.map(function (_, i) { return i; });
+            let sx = 0, sy = 0, sxy = 0, sxx = 0;
+            for (let i = 0; i < n; i++) { const x = X[i]; sx += x; sy += ys[i]; sxy += x * ys[i]; sxx += x * x; }
+            const den = n * sxx - sx * sx;
+            if (!den) return null;
+            const m = (n * sxy - sx * sy) / den;
+            const b = (sy - m * sx) / n;
+            return { pend: m, primero: b + m * X[0], ultimo: b + m * X[n - 1], puntos: X.map(function (x) { return b + m * x; }) };
+        }
+
+        function trendChip(texto, color) {
+            return '<span class="px-2.5 py-1 rounded-lg border font-semibold" style="color:' + color +
+                '; border-color:' + color + '33; background:' + color + '0d">' + texto + '</span>';
+        }
+
+        // ==================== PARTE 1: CAMPANA DE DISTRIBUCIÓN ====================
+        const BELL_NOTE_MIN_DAYS = 'Se necesitan al menos 3 días en el rango para dibujar la campana.';
+
+        function bellValues(data, range) {
+            const counts = new Map();
+            for (const r of data) {
+                if (!r.fechaStr) continue;
+                counts.set(r.fechaStr, (counts.get(r.fechaStr) || 0) + 1);
+            }
+            const days = [];
+            const cur = isoToDateUTC(range.min);
+            const end = isoToDateUTC(range.max);
+            while (cur <= end) {
+                const iso = isoUTC(cur);
+                if (includeNonBizInAverage || isBusinessDay(iso)) days.push({ iso, count: counts.get(iso) || 0 });
+                cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+            return days;
+        }
+
+        function shortDate(iso) {
+            const p = iso.split('-');
+            return p[2] + '/' + p[1];
+        }
+
+        // Función de distribución normal acumulada (Abramowitz & Stegun 13.1.26), para los % teóricos.
+        function normCdf(z) {
+            const t = 1 / (1 + 0.2316419 * Math.abs(z));
+            const p = 0.39894228 * Math.exp(-z * z / 2) * t *
+                (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+            return z > 0 ? 1 - p : p;
+        }
+
+        function bellChip(label, value) {
+            return '<span class="bg-teal-50 text-teal-800 border border-teal-200 px-2.5 py-1 rounded-lg">' +
+                label + ': <span class="font-black">' + value + '</span></span>';
+        }
+
+        function renderBellChart() {
+            const ctx = document.getElementById('chart-bell').getContext('2d');
+            const statsBox = document.getElementById('bell-stats');
+            const note = document.getElementById('bell-empty-note');
+
+            // Etiqueta opcional: si el HTML se guarda desde el navegador puede faltar, y un null aquí
+            // cortaba renderBellChart y dejaba el velo de "Dibujando gráficos" para siempre.
+            const popLabel = document.getElementById('bell-pop-label');
+            if (popLabel) popLabel.textContent =
+                includeNonBizInAverage ? 'todos los días del rango' : 'días hábiles (sáb/dom/festivos excluidos)';
+
+            if (chartBellInstance) { chartBellInstance.destroy(); chartBellInstance = null; }
+
+            const range = getDateRange(currentData);
+            const days = range ? bellValues(currentData, range) : [];
+            const leftBox = document.getElementById('bell-left-stats');
+            const centerBox = document.getElementById('bell-center-stats');
+            const rightBox = document.getElementById('bell-right-stats');
+
+            if (days.length < 3) {
+                note.textContent = BELL_NOTE_MIN_DAYS;
+                note.classList.remove('hidden');
+                statsBox.innerHTML = '';
+                leftBox.innerHTML = centerBox.innerHTML = rightBox.innerHTML = '';
+                chartBellInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: [], datasets: [] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: false }
+                });
+                return;
+            }
+            note.textContent = BELL_NOTE_MIN_DAYS;
+            note.classList.add('hidden');
+
+            const values = days.map(d => d.count);
+            const n = values.length;
+            const mean = values.reduce((s, v) => s + v, 0) / n;
+            const sd = Math.sqrt(values.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (n - 1));
+            const ordered = values.slice().sort((a, b) => a - b);
+            const mid = Math.floor(n / 2);
+            const median = n % 2 ? ordered[mid] : (ordered[mid - 1] + ordered[mid]) / 2;
+            const min = ordered[0], max = ordered[n - 1];
+
+            statsBox.innerHTML =
+                bellChip('Promedio', mean.toFixed(1)) +
+                bellChip('Mediana', median.toFixed(1)) +
+                bellChip('Desviación', sd.toFixed(1)) +
+                bellChip('Días', fmtNum(n));
+
+            // Sin dispersión no hay campana: todos los días valen lo mismo.
+            if (sd <= 0) {
+                note.textContent = 'Todos los días del rango tienen el mismo conteo (' + fmtNum(mean) + ' servicios), así que la campana colapsa en una línea.';
+                note.classList.remove('hidden');
+                leftBox.innerHTML = centerBox.innerHTML = rightBox.innerHTML = '';
+                chartBellInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets: [] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: false }
+                });
+                return;
+            }
+
+            // Campana de Gauss: eje X = servicios del día, partido en franjas de una desviación alrededor del promedio.
+            // Las colas llegan hasta el día más bajo y más alto real: ningún día queda fuera de las franjas.
+            const xMin = Math.min(mean - 3.4 * sd, min), xMax = Math.max(mean + 3.4 * sd, max);
+            const marks = [-3, -2, -1, 0, 1, 2, 3].map(k => mean + k * sd);
+            // El usuario pidió el dibujo clásico pero sin la notación σ/μ: las franjas se nombran en palabras.
+            const bandNames = [
+                'lejos por debajo del promedio',
+                'entre 2 y 3 desviaciones por debajo',
+                'entre 1 y 2 desviaciones por debajo',
+                'apenas debajo del promedio',
+                'apenas encima del promedio',
+                'entre 1 y 2 desviaciones por encima',
+                'entre 2 y 3 desviaciones por encima',
+                'lejos por encima del promedio'
+            ];
+            const bounds = [xMin].concat(marks, [xMax]);
+            const bandColors = ['#bae6fd', '#38bdf8', '#0284c7', '#075985', '#075985', '#0284c7', '#38bdf8', '#bae6fd'];
+            const pdf = (x) => Math.exp(-0.5 * ((x - mean) / sd) * ((x - mean) / sd)) / (sd * Math.sqrt(2 * Math.PI));
+
+            const bands = [];
+            for (let i = 0; i < 8; i++) {
+                const a = bounds[i], b = bounds[i + 1];
+                const inBand = values.filter(v => i === 7 ? (v >= a && v <= b) : (v >= a && v < b)).length;
+                bands.push({
+                    a, b, name: bandNames[i], color: bandColors[i], days: inBand,
+                    pctReal: (inBand / n) * 100,
+                    pctTheo: (normCdf((b - mean) / sd) - normCdf((a - mean) / sd)) * 100
+                });
+            }
+
+            // Mismo corte que la campana: la franja central arranca en el promedio, así que un día
+            // clavado justo en ese número pertenece al lado derecho. Si se filtrara por ">", las cajas
+            // y la montaña dejarían de cuadrar (a ti te faltaba un día arriba).
+            const exact = days.filter(d => d.count === mean);
+            const below = days.filter(d => d.count < mean).sort((a, b) => a.count - b.count);
+            const above = days.filter(d => d.count >= mean).sort((a, b) => b.count - a.count);
+            const avgOf = arr => arr.length ? arr.reduce((s, d) => s + d.count, 0) / arr.length : 0;
+            const fmtD = k => fmtNum(Math.round(k));
+            const extremes = arr => arr.slice(0, 3).map(d => shortDate(d.iso) + ' con ' + fmtD(d.count)).join(', ');
+            const core = bands[3].days + bands[4].days;
+
+            // Caja de un lado de la campana: cuántos días, qué hicieron en promedio y cuáles fueron los extremos.
+            const sideBox = (arr, when, worstLabel, extra) => {
+                if (!arr.length) return 'Ningún día del rango ' + when + '.';
+                const avg = avgOf(arr);
+                return '<strong>' + arr.length + ' de ' + n + '</strong> días ' + when +
+                    '<br>Esos días promediaron <strong>' + fmtD(avg) + ' servicios</strong>, ' +
+                        fmtD(Math.abs(avg - mean)) + (avg >= mean ? ' más' : ' menos') + ' que el promedio del rango' +
+                    '<br>' + worstLabel + ': ' + extremes(arr) +
+                    (extra ? '<br>' + extra : '');
+            };
+            const exactNote = exact.length
+                ? 'Ojo: ' + (exact.length === 1 ? '1 día quedó' : exact.length + ' días quedaron') +
+                  ' clavado' + (exact.length === 1 ? '' : 's') + ' justo en el promedio: ' +
+                  extremes(exact.slice().sort((a, b) => a.iso.localeCompare(b.iso)))
+                : '';
+            leftBox.innerHTML = sideBox(below, 'hicieron <strong>menos de ' + fmtD(mean) + ' servicios</strong>', 'Los más flacos', '');
+            rightBox.innerHTML = sideBox(above, 'hicieron <strong>' + fmtD(mean) + ' servicios o más</strong>', 'Los más fuertes', exactNote);
+            centerBox.innerHTML = 'Un día típico hace <strong>' + fmtD(mean) + ' servicios</strong>' +
+                '<br>Lo normal oscila entre <strong>' + fmtD(mean - sd) + ' y ' + fmtD(mean + sd) + ' servicios</strong>' +
+                '<br>Ahí caen <strong>' + core + ' de ' + n + '</strong> días (' + fmtD((core / n) * 100) + '%); el dibujo clásico esperaría 68%' +
+                (below.length && above.length
+                    ? '<br>Tus días flacos están a ' + fmtD(mean - avgOf(below)) + ' servicios del promedio y los fuertes a ' + fmtD(avgOf(above) - mean)
+                    : '');
+
+            // Cada franja es un área propia bajo la normal: así los cortes blancos caen justo en cada σ.
+            const datasets = bands.map((b, i) => {
+                const pts = [];
+                for (let k = 0; k <= 24; k++) {
+                    const x = b.a + (b.b - b.a) * k / 24;
+                    pts.push({ x, y: pdf(x) });
+                }
+                return {
+                    type: 'line', label: b.name, data: pts, bandIndex: i,
+                    borderColor: 'rgba(255,255,255,0.95)', borderWidth: 1.5,
+                    pointRadius: 0, tension: 0, fill: 'origin', backgroundColor: b.color
+                };
+            });
+
+            const bandLabels = {
+                id: 'bellBandLabels',
+                afterDatasetsDraw: (chart) => {
+                    const c = chart.ctx, xs = chart.scales.x, ys = chart.scales.y;
+                    const area = chart.chartArea;
+                    c.save();
+                    c.textAlign = 'center';
+                    bands.forEach((b, i) => {
+                        const pa = xs.getPixelForValue(b.a), pb = xs.getPixelForValue(b.b);
+                        const top = ys.getPixelForValue(pdf((b.a + b.b) / 2) * 0.72);
+                        const inside = (pb - pa > 46) && ys.getPixelForValue(0) - top > 34;
+                        const base = ys.getPixelForValue(0);
+                        // Las colas no caben bajo la curva y van pegadas una a la otra: se escriben
+                        // sobre el eje y a distinta altura (la más externa más arriba) para no encimarse.
+                        const rank = (i === 0 || i === 7) ? 0 : 1;
+                        const cx = inside ? (pa + pb) / 2 : Math.min(Math.max((pa + pb) / 2, area.left + 24), area.right - 24);
+                        const y0 = inside ? top + 4 : base - (rank === 0 ? 48 : 18);
+                        c.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+                        c.fillStyle = inside ? '#ffffff' : '#334155';
+                        c.fillText(b.pctTheo.toFixed(1) + '%', cx, y0);
+                        if (b.days === 0) return;
+                        // Dentro de la franja el texto compite con el corte blanco del vecino: 9px bastan.
+                        c.font = (inside ? '9px ' : '10px ') + 'ui-sans-serif, system-ui, sans-serif';
+                        c.fillStyle = inside ? 'rgba(255,255,255,0.85)' : '#64748b';
+                        const real = inside ? 'tus días: ' + b.pctReal.toFixed(1) + '%'
+                            : b.pctReal.toFixed(1) + '% · ' + b.days + (b.days === 1 ? ' día' : ' días');
+                        c.fillText(real, cx, y0 + 13);
+                        if (inside) c.fillText(b.days + ' día' + (b.days === 1 ? '' : 's'), cx, y0 + 24);
+                    });
+                    c.restore();
+                }
+            };
+
+            chartBellInstance = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 18 } },
+                    interaction: { mode: 'nearest', intersect: true },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => {
+                                    const b = bands[items[0].dataset.bandIndex];
+                                    return fmtNum(Math.round(b.a)) + ' a ' + fmtNum(Math.round(b.b)) + ' servicios';
+                                },
+                                label: (item) => {
+                                    const b = bands[item.dataset.bandIndex];
+                                    return [
+                                        b.name,
+                                        'Gauss: ' + b.pctTheo.toFixed(1) + '%',
+                                        'Tus días: ' + b.pctReal.toFixed(1) + '% (' + b.days + ' de ' + n + ')'
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { display: false, beginAtZero: true, max: pdf(mean) * 1.18 },
+                        x: {
+                            type: 'linear', min: xMin, max: xMax,
+                            grid: { display: false },
+                            afterBuildTicks: (axis) => { axis.ticks = marks.map(v => ({ value: v })); },
+                            ticks: { callback: (v, i) => (i === 3 ? ['promedio', fmtNum(Math.round(v))] : [fmtNum(Math.round(v))]), font: { size: 11 } },
+                            title: { display: true, text: 'Servicios hechos ese día (el centro es el promedio de la gráfica 1)' }
+                        }
+                    }
+                },
+                plugins: [bandLabels]
+            });
+        }
+
+        // ==================== PARTE 2.1: ZONAS ====================
+        const ZONE_PALETTE = [
+            '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6',
+            '#14b8a6', '#f97316', '#6366f1', '#06b6d4', '#84cc16',
+            '#a855f7', '#64748b', '#0284c7', '#d97706', '#be123c'
+        ];
+
+        function renderZonesModule() {
+            const domicileRows = currentData.filter(r => isDomicilio(r.origen));
+
+            // Una fila = un servicio. Los usuarios se deducen con patientKey, la misma llave del ranking,
+            // para que "957 servicios" y "165 usuarios" cuadren con el Top de usuarios más abajo.
+            const zoneStats = new Map();
+            const allUsers = new Set();
+            domicileRows.forEach(r => {
+                const z = r.ciudadOrigen || 'Sin Zona';
+                const key = patientKey(r);
+                let s = zoneStats.get(z);
+                if (!s) { s = { serv: 0, users: new Set() }; zoneStats.set(z, s); }
+                s.serv++;
+                s.users.add(key);
+                allUsers.add(key);
+            });
+
+            const sortedZones = Array.from(zoneStats.entries()).sort((a, b) => b[1].serv - a[1].serv);
+            const totalDomiciles = domicileRows.length;
+            const totalUsers = allUsers.size;
+
+            document.getElementById('zones-total-badge').textContent =
+                fmtNum(totalDomiciles) + ' Domicilios Totales · ' + fmtNum(totalUsers) + ' Usuarios' +
+                (totalUsers ? ' (' + (totalDomiciles / totalUsers).toFixed(1) + ' servicios c/u)' : '');
+
+            const tbody = document.getElementById('zones-table-body');
+            tbody.innerHTML = '';
+            const zoneColor = (i) => ZONE_PALETTE[i % ZONE_PALETTE.length];
+            sortedZones.forEach(([zone, s], i) => {
+                const pct = totalDomiciles > 0 ? ((s.serv / totalDomiciles) * 100).toFixed(1) : '0.0';
+                const usuarios = s.users.size;
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';
+                tr.innerHTML =
+                    '<td class="p-2.5 font-bold text-slate-800"><span class="inline-block w-2.5 h-2.5 rounded-sm mr-2 align-middle" style="background:' + zoneColor(i) + '"></span>' + escapeHtml(zone) + '</td>' +
+                    '<td class="p-2.5 text-center font-bold text-rose-600">' + fmtNum(s.serv) + '</td>' +
+                    '<td class="p-2.5 text-center whitespace-nowrap"><span class="font-bold text-indigo-700">' + fmtNum(usuarios) + '</span>' +
+                        '<span class="text-slate-400 text-[10px]"> · ' + (s.serv / usuarios).toFixed(1) + ' c/u</span></td>' +
+                    '<td class="p-2.5 text-right font-medium text-slate-500">' + pct + '%</td>';
+                tbody.appendChild(tr);
+            });
+
+            if (chartZonesInstance) chartZonesInstance.destroy();
+            chartZonesInstance = new Chart(document.getElementById('chart-zones').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: sortedZones.map(e => e[0]),
+                    datasets: [{
+                        data: sortedZones.map(e => e[1].serv),
+                        backgroundColor: sortedZones.map((_, i) => zoneColor(i))
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        // La leyenda se pinta en la tabla de al lado: con +100 zonas desborda el panel.
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const s = sortedZones[item.dataIndex][1];
+                                    const pct = totalDomiciles > 0 ? ((item.parsed / totalDomiciles) * 100).toFixed(1) : '0.0';
+                                    return [
+                                        ' ' + fmtNum(item.parsed) + ' servicios (' + pct + '%)',
+                                        ' ' + fmtNum(s.users.size) + ' usuarios · ' +
+                                            (item.parsed / s.users.size).toFixed(1) + ' servicios c/u'
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ==================== PARTE 2.2: USUARIOS FRECUENTES ====================
+        // Agrupa por DOCUMENTO: dos personas homónimas no se suman y un mismo paciente
+        // escrito distinto no se parte. Si no hay documento, usa el nombre.
+        // Es la única regla de identidad: la tabla de zonas la reutiliza para que ambas vistas cuadren.
+        function patientKey(r) {
+            const doc = (r.documento || '').trim();
+            return doc ? 'D:' + doc : 'N:' + (r.paciente || 'Sin Nombre').toLowerCase();
+        }
+
+        function buildPatientStats(data) {
+            const byKey = new Map();
+            data.forEach(r => {
+                const key = patientKey(r);
+                const doc = (r.documento || '').trim();
+                let p = byKey.get(key);
+                if (!p) { p = { key, doc, nombres: new Map(), zonas: new Map(), total: 0, domicilio: 0 }; byKey.set(key, p); }
+                p.total++;
+                const nombre = r.paciente || 'Sin Nombre';
+                p.nombres.set(nombre, (p.nombres.get(nombre) || 0) + 1);
+                if (isDomicilio(r.origen)) {
+                    p.domicilio++;
+                    const z = r.ciudadOrigen || 'Sin Zona';
+                    p.zonas.set(z, (p.zonas.get(z) || 0) + 1);
+                }
+            });
+
+            byKey.forEach(p => {
+                p.nombre = topKey(p.nombres) || 'Sin Nombre';
+                p.zona = topKey(p.zonas) || 'Sin Zona';   // zona modal, no la última
+            });
+            return byKey;
+        }
+
+        function topKey(map) {
+            let best = null, bestCount = -1;
+            map.forEach((count, k) => { if (count > bestCount) { bestCount = count; best = k; } });
+            return best;
+        }
+
+        function renderUsersChartDynamicHeight() {
+            const topNVal = document.getElementById('frequent-top-select').value;
+
+            // Criterio pedido: el ranking cuenta SOLO las filas con Origen = "Domicilio", o sea las
+            // recogidas en donde vive el usuario. Un traslado desde el hospital no suma aquí.
+            const rowsDom = currentData.filter(r => isDomicilio(r.origen));
+            const patients = Array.from(buildPatientStats(rowsDom).values())
+                .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, 'es'));
+            const todos = buildPatientStats(currentData);
+
+            const sorted = topNVal === 'ALL' ? patients : patients.slice(0, parseInt(topNVal, 10) || 15);
+
+            const labels = sorted.map(p => p.doc ? p.nombre + ' (' + p.doc + ')' : p.nombre);
+            const values = sorted.map(p => p.total);
+
+            const container = document.getElementById('users-chart-container');
+            container.style.height = Math.max(380, sorted.length * 26) + 'px';
+
+            // El eje X va de 1 en 1 mientras quepa; si no, se ensancha el paso para no encimar etiquetas.
+            const maxServ = values.length ? Math.max.apply(null, values) : 0;
+            const xStep = maxServ <= 40 ? 1 : maxServ <= 80 ? 2 : 5;
+
+            if (chartUsersInstance) chartUsersInstance.destroy();
+            chartUsersInstance = new Chart(document.getElementById('chart-users').getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Recogidas desde el domicilio', data: values, backgroundColor: '#3b82f6', borderRadius: 4 }] },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: (item) => {
+                                    const p = sorted[item.dataIndex];
+                                    const t = todos.get(p.key);
+                                    const otros = t ? t.total - p.total : 0;
+                                    return ['Zona más frecuente: ' + p.zona,
+                                        'Otros servicios del mismo usuario (origen distinto): ' + otros];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { precision: 0, stepSize: xStep, autoSkip: xStep !== 1, font: { size: 11 } } },
+                        y: { grid: { display: false }, ticks: { autoSkip: false, font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        // ==================== PARTE 2.2-B: CUADRO RESUMEN DE FRECUENCIA ====================
+        // Para responder "¿cuántos usuarios tienen 20?" sin contar barras en la pantalla: una fila por
+        // cada cantidad, con su acumulado "o más". No agrupa por bandas porque eso sería inventar un corte.
+        function renderFrequencySummary() {
+            const tbody = document.getElementById('freq-summary-body');
+            const badge = document.getElementById('freq-summary-badge');
+            const patients = Array.from(buildPatientStats(currentData.filter(r => isDomicilio(r.origen))).values());
+
+            const porCantidad = new Map();
+            patients.forEach(p => porCantidad.set(p.total, (porCantidad.get(p.total) || 0) + 1));
+            const cantidades = Array.from(porCantidad.keys()).sort((a, b) => b - a);
+
+            const totalUsuarios = patients.length;
+            const totalServicios = patients.reduce((s, p) => s + p.total, 0);
+            let acum = 0;
+            tbody.innerHTML = cantidades.map(function (c) {
+                const n = porCantidad.get(c);
+                acum += n;
+                const acumAqui = acum;
+                return '<tr class="hover:bg-indigo-50/40 transition-colors">' +
+                    '<td class="p-2 text-center font-black text-indigo-700">' + fmtNum(c) + '</td>' +
+                    '<td class="p-2 text-center font-bold text-slate-800">' + fmtNum(n) + '</td>' +
+                    '<td class="p-2 text-right text-slate-500">' + (totalUsuarios ? (n / totalUsuarios * 100).toFixed(1) : '0.0') + ' %</td>' +
+                    '<td class="p-2 text-right font-semibold text-purple-700">' + fmtNum(acumAqui) + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            badge.textContent = fmtNum(totalUsuarios) + ' usuarios · ' + fmtNum(totalServicios) + ' recogidas desde el domicilio';
+        }
+
+        // ==================== PARTE 2.3: RECURRENTES POR ZONA ====================
+        function renderRecurrentUsersByZoneModule() {
+            const threshold = parseInt(document.getElementById('recurrent-threshold-select').value, 10) || 2;
+            const patients = buildPatientStats(currentData.filter(r => isDomicilio(r.origen)));
+
+            const zoneAgg = new Map();
+            patients.forEach(p => {
+                if (p.total < threshold) return;
+                const z = p.zona || 'Sin Zona';
+                let a = zoneAgg.get(z);
+                if (!a) { a = { recurrentUsers: 0, totalTraslados: 0 }; zoneAgg.set(z, a); }
+                a.recurrentUsers++;
+                a.totalTraslados += p.total;
+            });
+
+            const sortedRecurrent = Array.from(zoneAgg.entries())
+                .map(([zona, v]) => ({ zona, recurrentUsers: v.recurrentUsers, totalTraslados: v.totalTraslados }))
+                .sort((a, b) => b.recurrentUsers - a.recurrentUsers || a.zona.localeCompare(b.zona, 'es'));
+
+            const tbody = document.getElementById('combo-table-body');
+            tbody.innerHTML = '';
+            sortedRecurrent.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';
+                tr.innerHTML =
+                    '<td class="p-2.5 font-bold text-slate-800">' + escapeHtml(item.zona) + '</td>' +
+                    '<td class="p-2.5 text-center font-bold text-purple-600">' + fmtNum(item.recurrentUsers) + '</td>' +
+                    '<td class="p-2.5 text-right font-medium text-slate-500">' + fmtNum(item.totalTraslados) + '</td>';
+                tbody.appendChild(tr);
+            });
+
+            if (chartUsersByZoneInstance) chartUsersByZoneInstance.destroy();
+            chartUsersByZoneInstance = new Chart(document.getElementById('chart-users-by-zone').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: sortedRecurrent.map(e => e.zona),
+                    datasets: [{
+                        label: 'Usuarios Recurrentes (≥' + threshold + ' serv)',
+                        data: sortedRecurrent.map(e => e.recurrentUsers),
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { precision: 0 } }
+                    }
+                }
+            });
+        }
+
+        // ==================== PARTE 3: VEHÍCULOS ====================
+        function renderVehiclesChartInteractive() {
+            const data = currentData;
+            const vehMetrics = new Map();
+
+            data.forEach(r => {
+                const v = r.vehiculo;
+                if (!v) return;
+                let m = vehMetrics.get(v);
+                if (!m) { m = { servicios: 0, valor: 0 }; vehMetrics.set(v, m); }
+                m.servicios++;
+                m.valor += r.valor;
+            });
+
+            // Tabla y gráfica salen del MISMO arreglo: si se ordenaran por separado, el orden de las
+            // barras no coincidiría con el de las casillas que las filtran.
+            const sortedVehicles = Array.from(vehMetrics.entries()).sort(vehicleSortMode === 'valor'
+                ? (a, b) => (b[1].valor - a[1].valor) || compareVehicles(a, b)
+                : compareVehicles);
+            allAvailableVehicles = sortedVehicles.map(e => e[0]);
+
+            // Solo se auto-seleccionan todos la primera vez; "Desmarcar Todos" debe respetarse.
+            if (!vehiclesInitialized) {
+                allAvailableVehicles.forEach(v => selectedVehicles.add(v));
+                vehiclesInitialized = true;
+            } else {
+                const available = new Set(allAvailableVehicles);
+                selectedVehicles.forEach(v => { if (!available.has(v)) selectedVehicles.delete(v); });
+            }
+
+            const tableBody = document.getElementById('vehicle-table-body');
+            tableBody.innerHTML = '';
+
+            sortedVehicles.forEach(([veh, metrics]) => {
+                const isChecked = selectedVehicles.has(veh);
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-indigo-50/50 cursor-pointer transition-colors ' + (isChecked ? 'bg-indigo-50/30' : '');
+                tr.innerHTML =
+                    '<td class="p-2 text-center"><input type="checkbox" class="veh-checkbox rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"' + (isChecked ? ' checked' : '') + '></td>' +
+                    '<td class="p-2 font-bold text-slate-800">' + escapeHtml(veh) + '</td>' +
+                    '<td class="p-2 text-center font-medium">' + fmtNum(metrics.servicios) + '</td>' +
+                    '<td class="p-2 text-right font-bold text-emerald-600">' + fmtMoney(metrics.valor) + '</td>';
+
+                tr.addEventListener('click', (e) => {
+                    const cb = tr.querySelector('.veh-checkbox');
+                    if (e.target.tagName !== 'INPUT') cb.checked = !cb.checked;
+                    toggleVehicle(veh, cb.checked);
+                });
+
+                tableBody.appendChild(tr);
+            });
+
+            document.getElementById('vehicle-count-badge').textContent =
+                selectedVehicles.size + ' de ' + allAvailableVehicles.length + ' Seleccionados';
+
+            const filteredVehicles = sortedVehicles.filter(([veh]) => selectedVehicles.has(veh));
+
+            if (chartVehiclesInstance) chartVehiclesInstance.destroy();
+            chartVehiclesInstance = new Chart(document.getElementById('chart-vehicles').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: filteredVehicles.map(e => e[0]),
+                    datasets: [
+                        { type: 'bar', label: 'Servicios Realizados', data: filteredVehicles.map(e => e[1].servicios), backgroundColor: '#f59e0b', yAxisID: 'y', borderRadius: 4 },
+                        { type: 'bar', label: 'Valor Generado ($)', data: filteredVehicles.map(e => e[1].valor), backgroundColor: '#8b5cf6', yAxisID: 'y1', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxRotation: 90, font: { size: 10 } } },
+                        y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'Cant. Servicios' }, grid: { color: '#f1f5f9' }, ticks: { precision: 0 } },
+                        y1: {
+                            type: 'linear', position: 'right', beginAtZero: true,
+                            title: { display: true, text: 'Valor ($)' }, grid: { display: false },
+                            ticks: { callback: (val) => '$' + (val / 1000000).toFixed(1) + 'M' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleVehicle(veh, isSelected) {
+            if (isSelected) selectedVehicles.add(veh);
+            else selectedVehicles.delete(veh);
+            renderVehiclesChartInteractive();
+        }
+
+        function selectAllVehicles(shouldSelect) {
+            if (shouldSelect) allAvailableVehicles.forEach(v => selectedVehicles.add(v));
+            else selectedVehicles.clear();
+            vehiclesInitialized = true;
+            renderVehiclesChartInteractive();
+        }
+
+        // ==================== PARTE 3.2: COBERTURA POR ZONA Y SEMANA ====================
+        // Mapa operativo Ciudad Origen -> Zona, transcrito de la tabla de zonas de Orosol.
+        // La comparación elimina tildes y mayúsculas: "Ibagué" e "Ibague" son la misma ciudad.
+        const OPERATIONAL_ZONES = {
+            'Norte': ['Manizales', 'Herveo', 'Casabianca', 'Fresno', 'Honda', 'Villahermosa', 'Murillo', 'Palocabildo', 'Falan', 'Mariquita', 'Líbano', 'Armero', 'Ambalema', 'Lérida', 'Santa Isabel', 'Junín', 'Anzoátegui', 'Venadillo', 'Piedras', 'Alvarado'],
+            'Centro': ['Ibagué', 'Armenia', 'Tebaida', 'Calarcá', 'San Luis', 'Payandé', 'Doima', 'Cajamarca', 'Valle de San Juan', 'Rovira', 'Rodeo'],
+            'Sur': ['Planadas', 'Neiva', 'Bogotá', 'Rioblanco', 'Ataco', 'Chaparral', 'Dolores', 'Cunday', 'Natagaima', 'Coyaima', 'Prado', 'Ortega', 'Purificación', 'Saldaña', 'San Antonio', 'Guamo', 'Espinal', 'Chicoral', 'Coello', 'Suárez'],
+            'Magdalena Medio': []
+        };
+        // Magdalena Medio no tiene lista fija de ciudades: se reconoce por la hoja del Excel. Estas dos salen de la
+        // hoja Tolima y sí son de esa zona, pero no entran en OPERATIONAL_ZONES para no exigir cobertura de ellas.
+        const MM_CITIES_BY_NAME = ['La Dorada', 'Victoria'];
+        const UNCLASSIFIED_ZONE = 'Sin clasificar';
+        const ZONE_COLORS = {
+            'Norte': '#2563eb', 'Centro': '#059669', 'Sur': '#d97706',
+            'Magdalena Medio': '#7c3aed', 'Sin clasificar': '#64748b'
+        };
+        const ZONE_NAMES = Object.keys(OPERATIONAL_ZONES).concat([UNCLASSIFIED_ZONE]);
+        const ZW_ROW_LIMIT = 1500;
+
+        function normCity(c) {
+            return stripAccents(String(c === null || c === undefined ? '' : c))
+                .toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        const CITY_TO_ZONE = new Map();
+        Object.keys(OPERATIONAL_ZONES).forEach(function (z) {
+            OPERATIONAL_ZONES[z].forEach(function (c) { CITY_TO_ZONE.set(normCity(c), z); });
+        });
+        MM_CITIES_BY_NAME.forEach(function (c) { CITY_TO_ZONE.set(normCity(c), 'Magdalena Medio'); });
+
+        function zoneOfCity(ciudad) {
+            return CITY_TO_ZONE.get(normCity(ciudad)) || UNCLASSIFIED_ZONE;
+        }
+
+        // Regla del usuario: todo lo que viene de la hoja "Magdalena Medio" es de esa zona, sea cual sea la ciudad.
+        // Las demás hojas (Tolima) sí se clasifican por Ciudad Origen con la tabla de zonas.
+        function zoneOfRow(r) {
+            return /magdalena/i.test(r.hoja || '') ? 'Magdalena Medio' : zoneOfCity(r.ciudadOrigen);
+        }
+
+        function weekRangeLabel(mondayIso) {
+            const d = isoToDateUTC(mondayIso);
+            d.setUTCDate(d.getUTCDate() + 6);
+            return shortDate(mondayIso) + ' – ' + shortDate(isoUTC(d));
+        }
+
+        let zoneWeekState = { vehs: null, week: 'all', search: '' };
+
+        function fillZoneWeekSelect(id, keep, keepIfMissing, head, options, label) {
+            const sel = document.getElementById(id);
+            const chosen = options.indexOf(keep) !== -1 ? keep : keepIfMissing;
+            let html = head;
+            options.forEach(function (o) { html += '<option value="' + escapeHtml(o) + '">' + escapeHtml(label(o)) + '</option>'; });
+            sel.innerHTML = html;
+            sel.value = chosen;
+            return chosen;
+        }
+
+        // Los móviles son botones, no una lista desplegable: así se pueden comparar varios a la vez.
+        function renderVehicleChips(vehs) {
+            const box = document.getElementById('zw-veh-chips');
+            // Cada clic re-dibuja los botones; sin esto el cajón salta al inicio y se pierde el móvil que se estaba buscando.
+            const prevScroll = box.scrollTop;
+            const q = normCity(zoneWeekState.search);
+            const vis = vehs.filter(function (v) { return !q || normCity(v).indexOf(q) !== -1; });
+            const sel = zoneWeekState.vehs;
+
+            let html = '';
+            vis.forEach(function (v) {
+                const on = sel.has(v);
+                html += '<button type="button" data-veh="' + escapeHtml(v) + '" class="px-2 py-0.5 rounded-md border text-[11px] font-semibold transition-colors ' +
+                    (on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:border-indigo-400') + '">' +
+                    escapeHtml(v) + '</button>';
+            });
+            if (!vis.length) html = '<span class="text-[11px] text-slate-400">Ningún móvil coincide con "' + escapeHtml(zoneWeekState.search) + '"</span>';
+            box.innerHTML = html;
+            box.scrollTop = prevScroll;
+
+            document.getElementById('zw-veh-count').textContent =
+                sel.size === vehs.length ? (vehs.length === 1 ? 'El único móvil del histórico está seleccionado'
+                    : 'Los ' + fmtNum(vehs.length) + ' móviles están seleccionados')
+                    : fmtNum(sel.size) + ' de ' + fmtNum(vehs.length) + (vehs.length === 1 ? ' móvil seleccionado' : ' móviles seleccionados');
+        }
+
+        // Una fila = un móvil en una zona, agrupadas bajo el número de móvil (que se escribe una sola vez).
+        function renderZoneWeekModule() {
+            // TODAS las filas cuentan: un móvil que lleva a un paciente a Bogotá también estuvo en Bogotá.
+            const conVeh = currentData.filter(function (r) { return !!r.vehiculo; });
+
+            const vehs = Array.from(new Set(conVeh.map(function (r) { return r.vehiculo; })))
+                .sort(function (a, b) { return compareVehicles([a], [b]); });
+            const weeks = Array.from(new Set(conVeh.filter(function (r) { return !!r.fechaStr; })
+                .map(function (r) { return bucketOf(r.fechaStr, 'week'); }))).sort();
+            // S1, S2… numeradas en orden cronológico; el selector y la tabla usan el mismo número.
+            const weekNum = new Map(weeks.map(function (w, i) { return [w, i + 1]; }));
+            const weekTag = function (w) { return 'S' + weekNum.get(w); };
+            const weeksTip = function (set) {
+                return Array.from(set).sort().map(function (w) { return weekTag(w) + ': ' + weekRangeLabel(w); }).join('  ·  ');
+            };
+
+            // Las dos listas se reconstruyen en cada carga: cambian con los filtros de arriba.
+            const known = new Set(vehs);
+            if (!zoneWeekState.vehs) zoneWeekState.vehs = new Set(vehs);
+            else zoneWeekState.vehs = new Set(Array.from(zoneWeekState.vehs).filter(function (v) { return known.has(v); }));
+            zoneWeekState.week = fillZoneWeekSelect('zw-week', zoneWeekState.week, 'all',
+                '<option value="all">Todo el histórico (' + weeks.length + ' semanas)</option>', weeks,
+                function (w) { return weekTag(w) + ' · ' + weekRangeLabel(w); });
+            renderVehicleChips(vehs);
+
+            const sel = conVeh.filter(function (r) {
+                if (!zoneWeekState.vehs.has(r.vehiculo)) return false;
+                if (zoneWeekState.week !== 'all') {
+                    if (!r.fechaStr || bucketOf(r.fechaStr, 'week') !== zoneWeekState.week) return false;
+                }
+                return true;
+            });
+
+            const agg = new Map();
+            const totVeh = new Map();
+            const sum = new Map();
+
+            function groupOf(v, zn) {
+                const key = v + '|' + zn;
+                let a = agg.get(key);
+                if (!a) { a = { veh: v, zona: zn, serv: 0, cities: new Map(), weeks: new Set() }; agg.set(key, a); }
+                return a;
+            }
+
+            sel.forEach(function (r) {
+                const v = r.vehiculo;
+                totVeh.set(v, (totVeh.get(v) || 0) + 1);
+
+                const zn = zoneOfRow(r);
+                const grp = groupOf(v, zn);
+                grp.serv++;
+
+                // La ciudad es siempre la de origen, diga o no "Domicilio".
+                const co = cleanText(r.ciudadOrigen);
+                if (co) grp.cities.set(co, (grp.cities.get(co) || 0) + 1);
+
+                // Las semanas salen de los servicios de la zona, diga o no "Domicilio" el origen.
+                if (r.fechaStr) grp.weeks.add(bucketOf(r.fechaStr, 'week'));
+            });
+
+            agg.forEach(function (a) {
+                let s = sum.get(a.zona);
+                if (!s) { s = { serv: 0, moviles: new Set(), cities: new Set() }; sum.set(a.zona, s); }
+                s.serv += a.serv;
+                if (a.serv) s.moviles.add(a.veh);
+                a.cities.forEach(function (_, city) { s.cities.add(city); });
+            });
+
+            const list = Array.from(agg.values()).sort(function (a, b) {
+                return compareVehicles([a.veh], [b.veh]) || b.serv - a.serv;
+            });
+
+            const shown = list.slice(0, ZW_ROW_LIMIT);
+
+            // Agrupa por móvil para poder poner el número en una celda que abarca todas sus zonas.
+            const grupos = [];
+            shown.forEach(function (a) {
+                const last = grupos[grupos.length - 1];
+                if (last && last[0].veh === a.veh) last.push(a);
+                else grupos.push([a]);
+            });
+
+            const rowsHtml = [];
+            grupos.forEach(function (g) {
+                const veh = g[0].veh;
+                const total = totVeh.get(veh) || g.reduce(function (s, a) { return s + a.serv; }, 0);
+                // Semana repetida = el móvil trabajó esa semana en más de una zona.
+                const rep = new Map();
+                g.forEach(function (a) {
+                    a.weeks.forEach(function (w) { const t = weekTag(w); rep.set(t, (rep.get(t) || 0) + 1); });
+                });
+                g.forEach(function (a, i) {
+                    const pool = OPERATIONAL_ZONES[a.zona] || [];
+                    const visitadas = new Set(Array.from(a.cities.keys()).map(normCity));
+                    const faltan = pool.filter(function (c) { return !visitadas.has(normCity(c)); });
+
+                    const cs = Array.from(a.cities.entries())
+                        .sort(function (x, y) { return y[1] - x[1] || x[0].localeCompare(y[0], 'es'); })
+                        .map(function (e) {
+                            return escapeHtml(e[0]) + ' <span class="text-slate-400">' + fmtNum(e[1]) + '</span>';
+                        })
+                        .join(', ');
+
+                    let sinServicio;
+                    if (!pool.length) sinServicio = '<span class="text-slate-300">&mdash;</span>';
+                    else if (!faltan.length) sinServicio = '<span class="text-emerald-700">todas cubiertas</span>';
+                    else sinServicio = escapeHtml(faltan.join(', '));
+
+                    const pct = (a.serv / (total || 1)) * 100;
+
+                    let html = '<tr class="hover:bg-sky-50/40' + (i === 0 ? ' zw-grp-top' : '') +
+                        (i === g.length - 1 ? ' zw-grp-bot' : '') + '">';
+                    if (i === 0) {
+                        html += '<td rowspan="' + g.length + '" class="zw-veh-cell p-2 align-top bg-slate-50">' +
+                            '<div class="font-bold text-amber-600 whitespace-nowrap">' + escapeHtml(veh) + '</div>' +
+                            '<div class="text-[10px] text-slate-500">' + fmtNum(total) + (total === 1 ? ' servicio' : ' servicios') + '</div>' +
+                            '<div class="text-[10px] text-slate-400">' + g.length + (g.length === 1 ? ' zona' : ' zonas') + '</div></td>';
+                    }
+                    html += '<td class="p-2 font-semibold whitespace-nowrap" style="color:' + ZONE_COLORS[a.zona] + '">' + escapeHtml(a.zona) + '</td>' +
+                        '<td class="p-2 text-center font-bold">' + fmtNum(a.serv) + '</td>' +
+                        '<td class="p-2 text-center text-slate-500">' + fmtNum(pct) + '%</td>' +
+                        '<td class="p-2 text-center text-slate-500 whitespace-nowrap" title="' + escapeHtml(weeksTip(a.weeks)) + '">' +
+                            (a.weeks.size ? Array.from(a.weeks).sort().map(function (w) {
+                                const t = weekTag(w);
+                                return rep.get(t) > 1 ? '<strong class="text-slate-900">' + t + '</strong>' : t;
+                            }).join(', ') : '<span class="text-slate-300">&mdash;</span>') + '</td>' +
+                        '<td class="p-2 text-slate-600">' + cs + '</td>' +
+                        '<td class="p-2 text-[10px] text-slate-400">' + sinServicio + '</td></tr>';
+                    rowsHtml.push(html);
+                });
+            });
+
+            const tbody = document.getElementById('zw-table-body');
+            tbody.innerHTML = rowsHtml.length ? rowsHtml.join('')
+                : '<tr><td colspan="7" class="p-4 text-center text-slate-400">No hay móviles seleccionados. Use "Seleccionar todos" o escriba uno en el buscador.</td></tr>';
+            // Cortar la tabla en silencio haría parecer que un móvil no existe.
+            if (list.length > shown.length) {
+                tbody.insertAdjacentHTML('beforeend', '<tr><td colspan="7" class="p-2 text-center text-[10px] text-rose-600">' +
+                    fmtNum(list.length - shown.length) + ' filas restantes no mostradas · seleccione menos móviles</td></tr>');
+            }
+
+            let chips = '';
+            ZONE_NAMES.forEach(function (zn) {
+                const s = sum.get(zn);
+                if (!s) return;
+                const pool = (OPERATIONAL_ZONES[zn] || []).length;
+                chips += '<div class="border rounded-lg px-3 py-1.5 text-[11px]" style="border-color:' + ZONE_COLORS[zn] + '33; background:' + ZONE_COLORS[zn] + '0d">' +
+                    '<span class="font-bold" style="color:' + ZONE_COLORS[zn] + '">' + escapeHtml(zn) + '</span>' +
+                    '<span class="text-slate-600"> &middot; ' + fmtNum(s.serv) + (s.serv === 1 ? ' servicio' : ' servicios') + ' &middot; ' +
+                    fmtNum(s.moviles.size) + (s.moviles.size === 1 ? ' móvil' : ' móviles') + ' &middot; ' +
+                    fmtNum(s.cities.size) + (pool ? ' de ' + fmtNum(pool) + ' ciudades con servicio' : ' ciudades') + '</span></div>';
+            });
+            document.getElementById('zw-summary').innerHTML = chips;
+        }
+
+        // ==================== PARTE 3.3: DÍAS SIN SERVICIO POR MÓVIL ====================
+        // Listado simple: una fila por móvil con sus días sin servicio y la alerta de días seguidos.
+        // Al hacer clic en un móvil se despliegan sus días sin servicio y el motivo de cada uno
+        // (sin programación, o el estado real de ese día: Cancelado/Anulado). Los domingos no cuentan.
+        const IDLE_ALERT_DAYS = 2;        // regla del usuario: alerta a los 2 días seguidos sin servicio
+        const IDLE_WDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+        let idleDaysState = { search: '', sort: 'idle', openVeh: null };
+
+        function idleLongDate(iso) {
+            const p = iso.split('-');
+            return IDLE_WDAYS[isoToDateUTC(iso).getUTCDay()] + ' ' + p[2] + '/' + p[1] + '/' + p[0];
+        }
+
+        function idleEvaluatedDays(range) {
+            const days = [];
+            const cur = isoToDateUTC(range.min);
+            const end = isoToDateUTC(range.max);
+            while (cur <= end) {
+                if (cur.getUTCDay() !== 0) days.push(isoUTC(cur));
+                cur.setUTCDate(cur.getUTCDate() + 1);
+            }
+            return days;
+        }
+
+        function idleStatsFor(workedSet, days) {
+            let idle = 0, streak = 0, curStart = null;
+            const idleDates = [];
+            days.forEach(function (iso) {
+                if (workedSet.has(iso)) { streak = 0; curStart = null; return; }
+                idle++;
+                idleDates.push(iso);
+                if (streak === 0) curStart = iso;
+                streak++;
+            });
+            return { idle: idle, idleDates: idleDates, current: streak, currentStart: streak ? curStart : null };
+        }
+
+        // Estados reales de ese móvil en cada fecha (todos los estados, no solo los marcados):
+        // así un día sin servicio válido puede mostrar "Cancelado" en vez de "Sin programación".
+        function idleDayReasons(veh) {
+            const byDate = new Map();
+            getActiveRows().forEach(function (r) {
+                if (r.vehiculo !== veh || !r.fechaStr) return;
+                let m = byDate.get(r.fechaStr);
+                if (!m) { m = new Map(); byDate.set(r.fechaStr, m); }
+                const st = r.estado || 'Sin Estado';
+                m.set(st, (m.get(st) || 0) + 1);
+            });
+            return byDate;
+        }
+
+        function idleReasonBadges(estadoMap) {
+            if (!estadoMap || !estadoMap.size) {
+                return '<span class="inline-block bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap">Sin programación</span>';
+            }
+            return Array.from(estadoMap.entries()).map(function (e) {
+                const cancelled = EXCLUDED_STATUS_RE.test(stripAccents(e[0]).toLowerCase());
+                const cls = cancelled ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-600 border-slate-200';
+                return '<span class="inline-block border px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ' + cls + '">' +
+                    escapeHtml(e[0]) + (e[1] > 1 ? ' · ' + fmtNum(e[1]) : '') + '</span>';
+            }).join(' ');
+        }
+
+        function idleDetailHtml(s) {
+            const reasons = idleDayReasons(s.veh);
+            let h = '<tr class="idle-detail"><td colspan="4" class="p-0">' +
+                '<div class="bg-slate-50 border-y border-slate-200 px-4 py-3">' +
+                '<div class="flex items-center justify-between gap-3 mb-2">' +
+                '<span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Días sin servicio · móvil ' + escapeHtml(s.veh) + '</span>' +
+                '<span class="text-[11px] text-slate-400">' + fmtNum(s.idle) + (s.idle === 1 ? ' día' : ' días') + '</span></div>';
+            if (!s.idle) {
+                h += '<div class="text-xs text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Trabajó todos los días evaluados (lun a sáb).</div>';
+            } else {
+                h += '<div class="max-h-[300px] overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">';
+                s.idleDates.forEach(function (iso) {
+                    const inStreak = s.currentStart && iso >= s.currentStart;
+                    h += '<div class="flex items-center justify-between gap-3 rounded-lg border px-3 py-1.5 ' +
+                        (inStreak ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white') + '">' +
+                        '<span class="text-xs font-semibold text-slate-700 whitespace-nowrap">' + idleLongDate(iso) + '</span>' +
+                        '<span class="flex flex-wrap gap-1 justify-end">' + idleReasonBadges(reasons.get(iso)) + '</span></div>';
+                });
+                h += '</div>';
+            }
+            return h + '</div></td></tr>';
+        }
+
+        function idleRowHtml(s, days, open) {
+            const inAlert = s.current >= IDLE_ALERT_DAYS;
+            const chev = '<svg class="w-4 h-4 text-slate-400 transition-transform inline-block ' + (open ? 'rotate-180' : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+            let streakCell, streakRange = '';
+            if (inAlert) streakCell = '<span class="inline-block bg-amber-100 border border-amber-400 text-amber-800 px-2 py-0.5 rounded-md text-[11px] font-black whitespace-nowrap">⚠ ' + fmtNum(s.current) + ' días seguidos</span>';
+            else if (s.current === 1) streakCell = '<span class="text-slate-600 font-semibold">1 día</span>';
+            else streakCell = '<span class="text-emerald-600 font-semibold">0</span>';
+            if (s.current === 1) streakRange = '<div class="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">' + shortDate(s.currentStart) + '</div>';
+            else if (s.current > 1) streakRange = '<div class="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">del ' + shortDate(s.currentStart) + ' al ' + shortDate(days[days.length - 1]) + '</div>';
+            return '<tr class="idle-row cursor-pointer transition-colors ' + (inAlert ? 'bg-amber-50/60 hover:bg-amber-100/60' : 'hover:bg-indigo-50/50') + '" data-veh="' + escapeHtml(s.veh) + '" title="Clic para ver los días sin servicio">' +
+                '<td class="p-2.5"><div class="font-bold text-amber-600 text-sm whitespace-nowrap">' + escapeHtml(s.veh) + '</div>' +
+                    '<div class="text-[10px] text-slate-400 whitespace-nowrap">' + fmtNum(s.serv) + (s.serv === 1 ? ' servicio' : ' servicios') + '</div></td>' +
+                '<td class="p-2.5 text-center"><span class="font-black text-base ' + (s.idle ? 'text-slate-800' : 'text-emerald-600') + '">' + fmtNum(s.idle) + '</span>' +
+                    '<span class="text-[10px] text-slate-400"> de ' + fmtNum(days.length) + '</span></td>' +
+                '<td class="p-2.5 text-center">' + streakCell + streakRange + '</td>' +
+                '<td class="p-2.5 text-right">' + chev + '</td></tr>';
+        }
+
+        function renderIdleDaysModule() {
+            const tbody = document.getElementById('idle-table-body');
+            if (!tbody) return;
+            const banner = document.getElementById('idle-alert-banner');
+            const alertText = document.getElementById('idle-alert-text');
+            const tabBadge = document.getElementById('tab-part3-alert-badge');
+            const countEl = document.getElementById('idle-count');
+
+            const conVeh = getActiveRows().filter(function (r) { return !!r.vehiculo && !!r.fechaStr; });
+            const range = getDateRange(conVeh);
+            const days = range ? idleEvaluatedDays(range) : [];
+            const vehs = Array.from(new Set(conVeh.map(function (r) { return r.vehiculo; })))
+                .sort(function (a, b) { return compareVehicles([a], [b]); });
+
+            const worked = new Map();
+            const servCount = new Map();
+            currentData.forEach(function (r) {
+                if (!r.vehiculo || !r.fechaStr) return;
+                let s = worked.get(r.vehiculo);
+                if (!s) { s = new Set(); worked.set(r.vehiculo, s); }
+                s.add(r.fechaStr);
+                servCount.set(r.vehiculo, (servCount.get(r.vehiculo) || 0) + 1);
+            });
+
+            const emptySet = new Set();
+            const stats = vehs.map(function (v) {
+                const st = idleStatsFor(worked.get(v) || emptySet, days);
+                st.veh = v;
+                st.serv = servCount.get(v) || 0;
+                return st;
+            });
+            const byVeh = new Map(stats.map(function (s) { return [s.veh, s]; }));
+
+            const alerts = stats.filter(function (s) { return s.current >= IDLE_ALERT_DAYS; })
+                .sort(function (a, b) { return b.current - a.current || compareVehicles([a.veh], [b.veh]); });
+
+            if (tabBadge) {
+                tabBadge.textContent = '⚠ ' + fmtNum(alerts.length);
+                tabBadge.classList.toggle('hidden', alerts.length === 0);
+            }
+            if (banner && alertText) {
+                if (alerts.length && range) {
+                    let h = '<strong class="text-amber-800">' + fmtNum(alerts.length) +
+                        (alerts.length === 1 ? ' móvil lleva' : ' móviles llevan') + ' ' + IDLE_ALERT_DAYS +
+                        ' o más días seguidos sin servicio</strong>' +
+                        '<span class="text-amber-700"> · al ' + idleLongDate(range.max) + '</span><div class="flex flex-wrap gap-1.5 mt-2">';
+                    alerts.forEach(function (s) {
+                        h += '<button type="button" data-veh="' + escapeHtml(s.veh) + '" class="bg-white hover:bg-amber-100 border border-amber-400 text-amber-900 px-2 py-1 rounded-lg text-[11px] font-bold transition-colors" title="Ver los días sin servicio de este móvil">' +
+                            escapeHtml(s.veh) + ' · ' + fmtNum(s.current) + (s.current === 1 ? ' día' : ' días') + '</button>';
+                    });
+                    alertText.innerHTML = h + '</div>';
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                    alertText.innerHTML = '';
+                }
+            }
+
+            if (idleDaysState.openVeh && !byVeh.has(idleDaysState.openVeh)) idleDaysState.openVeh = null;
+
+            const q = normCity(idleDaysState.search);
+            const shown = stats.filter(function (s) { return !q || normCity(s.veh).indexOf(q) !== -1; });
+            if (idleDaysState.sort === 'streak') shown.sort(function (a, b) { return b.current - a.current || b.idle - a.idle || compareVehicles([a.veh], [b.veh]); });
+            else if (idleDaysState.sort === 'movil') shown.sort(function (a, b) { return compareVehicles([a.veh], [b.veh]); });
+            else shown.sort(function (a, b) { return b.idle - a.idle || b.current - a.current || compareVehicles([a.veh], [b.veh]); });
+
+            if (countEl) {
+                countEl.textContent = (q ? fmtNum(shown.length) + ' de ' + fmtNum(vehs.length) : fmtNum(vehs.length)) +
+                    (vehs.length === 1 ? ' móvil' : ' móviles') +
+                    (range ? ' · ' + fmtNum(days.length) + ' días evaluados (lun a sáb)' : '');
+                countEl.title = range ? 'Del ' + idleLongDate(range.min) + ' al ' + idleLongDate(range.max) + '. Domingos excluidos.' : '';
+            }
+
+            if (!vehs.length || !range) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">No hay móviles con fecha en la vista actual.</td></tr>';
+                return;
+            }
+            if (!shown.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Ningún móvil coincide con "' + escapeHtml(idleDaysState.search) + '".</td></tr>';
+                return;
+            }
+
+            const rowsHtml = [];
+            shown.forEach(function (s) {
+                const open = idleDaysState.openVeh === s.veh;
+                rowsHtml.push(idleRowHtml(s, days, open));
+                if (open) rowsHtml.push(idleDetailHtml(s));
+            });
+            tbody.innerHTML = rowsHtml.join('');
+        }
+
+        // ==================== PARTE 4: TABLA DE DETALLE ====================
+        const TABLE_LIMIT = 300;
+        const CSV_COLUMNS = [
+            ['cs', 'CS'], ['rowNum', 'Fila Excel'], ['hoja', 'Hoja'], ['fechaStr', 'Fecha'],
+            ['hora', 'Hora'], ['horaLlegada', 'Hora Llegada'], ['estado', 'Estado'],
+            ['paciente', 'Paciente'], ['documento', 'Documento'], ['origen', 'Origen'],
+            ['ciudadOrigen', 'Ciudad Origen'], ['destino', 'Destino'], ['ciudadDestino', 'Ciudad Destino'],
+            ['zonaPaciente', 'Zona Paciente'], ['vehiculo', 'Vehiculo'], ['placa', 'Placa'],
+            ['conductor', 'Conductor'], ['empresa', 'Empresa'], ['proposito', 'Proposito'],
+            ['tipoViaje', 'Tipo Viaje'], ['tipo', 'Tipo'], ['valor', 'Valor']
+        ];
+
+        function getSearchedData() {
+            const term = document.getElementById('table-search').value.toLowerCase().trim();
+            if (!term) return currentData;
+            return currentData.filter(r =>
+                (r.paciente && r.paciente.toLowerCase().indexOf(term) !== -1) ||
+                (r.documento && r.documento.toLowerCase().indexOf(term) !== -1) ||
+                (r.vehiculo && r.vehiculo.toLowerCase().indexOf(term) !== -1) ||
+                (r.placa && r.placa.toLowerCase().indexOf(term) !== -1) ||
+                (r.conductor && r.conductor.toLowerCase().indexOf(term) !== -1) ||
+                (r.ciudadOrigen && r.ciudadOrigen.toLowerCase().indexOf(term) !== -1) ||
+                (r.ciudadDestino && r.ciudadDestino.toLowerCase().indexOf(term) !== -1) ||
+                (r.origen && r.origen.toLowerCase().indexOf(term) !== -1) ||
+                (r.destino && r.destino.toLowerCase().indexOf(term) !== -1) ||
+                (r.cs && r.cs.toLowerCase().indexOf(term) !== -1)
+            );
+        }
+
+        function renderRawTable() {
+            const filtered = getSearchedData();
+            const tbody = document.getElementById('raw-table-body');
+
+            const limit = Math.min(filtered.length, TABLE_LIMIT);
+            document.getElementById('table-record-count').textContent =
+                'Mostrando ' + fmtNum(limit) + ' de ' + fmtNum(filtered.length) + ' registros filtrados';
+            document.getElementById('table-limit-note').textContent = filtered.length > TABLE_LIMIT
+                ? '* Solo se muestran los primeros ' + TABLE_LIMIT + ' registros. Usa Exportar CSV para obtener los ' + fmtNum(filtered.length) + '.'
+                : '* Usa Exportar CSV para llevar estos datos a Excel.';
+
+            const html = [];
+            for (let i = 0; i < limit; i++) {
+                const r = filtered[i];
+                const isDup = r.cs && duplicateCS.has(r.cs);
+                const estadoNorm = stripAccents(r.estado || '').toLowerCase();
+                const badge = estadoNorm.indexOf('finaliz') === 0
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : (EXCLUDED_STATUS_RE.test(estadoNorm) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700');
+
+                html.push(
+                    '<tr class="hover:bg-slate-50 transition-colors' + (isDup ? ' bg-rose-50' : '') + '">' +
+                    '<td class="p-3 font-mono text-slate-500' + (isDup ? ' text-rose-600 font-bold' : '') + '">' + escapeHtml(r.cs) + (isDup ? ' ⚠' : '') + '</td>' +
+                    '<td class="p-3 text-slate-400 font-mono">' + r.rowNum + '</td>' +
+                    '<td class="p-3 text-slate-400">' + escapeHtml(r.hoja) + '</td>' +
+                    '<td class="p-3 font-medium">' + escapeHtml(r.fechaStr || '---') + '</td>' +
+                    '<td class="p-3 font-mono text-slate-500">' + escapeHtml(r.hora || '---') + '</td>' +
+                    '<td class="p-3 font-mono text-slate-500">' + escapeHtml(r.horaLlegada || '---') + '</td>' +
+                    '<td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] font-bold ' + badge + '">' + escapeHtml(r.estado) + '</span></td>' +
+                    '<td class="p-3 font-semibold text-slate-800">' + escapeHtml(r.paciente) + '</td>' +
+                    '<td class="p-3 text-slate-500 font-mono">' + escapeHtml(r.documento) + '</td>' +
+                    '<td class="p-3">' + escapeHtml(r.origen) + '</td>' +
+                    '<td class="p-3 font-medium text-indigo-600">' + escapeHtml(r.ciudadOrigen) + '</td>' +
+                    '<td class="p-3">' + escapeHtml(r.destino) + '</td>' +
+                    '<td class="p-3">' + escapeHtml(r.ciudadDestino) + '</td>' +
+                    '<td class="p-3 font-bold text-amber-600">' + escapeHtml(r.vehiculo) + '</td>' +
+                    '<td class="p-3 font-mono text-slate-500">' + escapeHtml(r.placa) + '</td>' +
+                    '<td class="p-3 text-slate-500">' + escapeHtml(r.conductor) + '</td>' +
+                    '<td class="p-3 text-right font-bold text-emerald-700">' + fmtMoney(r.valor) + '</td>' +
+                    '</tr>'
+                );
+            }
+            tbody.innerHTML = html.join('');
+        }
+
+        function exportCSV() {
+            const rows = getSearchedData();
+            if (rows.length === 0) { alert('No hay registros que exportar con los filtros actuales.'); return; }
+
+            const esc = v => {
+                const s = String(v === null || v === undefined ? '' : v);
+                return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            };
+
+            const lines = [CSV_COLUMNS.map(c => c[1]).join(';')];
+            rows.forEach(r => lines.push(CSV_COLUMNS.map(c => esc(r[c[0]])).join(';')));
+
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'traslados_filtrados_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+    </script>
+</body>
+</html>
